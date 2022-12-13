@@ -37,13 +37,13 @@ from gym_pybullet_drones.utils.utils import sync, str2bool
 DEFAULT_DRONES = DroneModel("cf2x")
 DEFAULT_NUM_DRONES = 3
 DEFAULT_PHYSICS = Physics("pyb")
-DEFAULT_VISION = False
+DEFAULT_VISION = True
 DEFAULT_GUI = True
 DEFAULT_RECORD_VISION = False
 DEFAULT_PLOT = True
 DEFAULT_USER_DEBUG_GUI = False
 DEFAULT_AGGREGATE = True
-DEFAULT_OBSTACLES = True
+DEFAULT_OBSTACLES = False
 DEFAULT_SIMULATION_FREQ_HZ = 240
 DEFAULT_CONTROL_FREQ_HZ = 48
 DEFAULT_DURATION_SEC = 12
@@ -83,55 +83,21 @@ def run(
         TARGET_POS[i, :] = R*np.cos((i/NUM_WP)*(2*np.pi)+np.pi/2)+INIT_XYZS[0, 0], R*np.sin((i/NUM_WP)*(2*np.pi)+np.pi/2)-R+INIT_XYZS[0, 1], 0
     wp_counters = np.array([int((i*NUM_WP/6)%NUM_WP) for i in range(num_drones)])
 
-    #### Debug trajectory ######################################
-    #### Uncomment alt. target_pos in .computeControlFromState()
-    # INIT_XYZS = np.array([[.3 * i, 0, .1] for i in range(num_drones)])
-    # INIT_RPYS = np.array([[0, 0,  i * (np.pi/3)/num_drones] for i in range(num_drones)])
-    # NUM_WP = control_freq_hz*15
-    # TARGET_POS = np.zeros((NUM_WP,3))
-    # for i in range(NUM_WP):
-    #     if i < NUM_WP/6:
-    #         TARGET_POS[i, :] = (i*6)/NUM_WP, 0, 0.5*(i*6)/NUM_WP
-    #     elif i < 2 * NUM_WP/6:
-    #         TARGET_POS[i, :] = 1 - ((i-NUM_WP/6)*6)/NUM_WP, 0, 0.5 - 0.5*((i-NUM_WP/6)*6)/NUM_WP
-    #     elif i < 3 * NUM_WP/6:
-    #         TARGET_POS[i, :] = 0, ((i-2*NUM_WP/6)*6)/NUM_WP, 0.5*((i-2*NUM_WP/6)*6)/NUM_WP
-    #     elif i < 4 * NUM_WP/6:
-    #         TARGET_POS[i, :] = 0, 1 - ((i-3*NUM_WP/6)*6)/NUM_WP, 0.5 - 0.5*((i-3*NUM_WP/6)*6)/NUM_WP
-    #     elif i < 5 * NUM_WP/6:
-    #         TARGET_POS[i, :] = ((i-4*NUM_WP/6)*6)/NUM_WP, ((i-4*NUM_WP/6)*6)/NUM_WP, 0.5*((i-4*NUM_WP/6)*6)/NUM_WP
-    #     elif i < 6 * NUM_WP/6:
-    #         TARGET_POS[i, :] = 1 - ((i-5*NUM_WP/6)*6)/NUM_WP, 1 - ((i-5*NUM_WP/6)*6)/NUM_WP, 0.5 - 0.5*((i-5*NUM_WP/6)*6)/NUM_WP
-    # wp_counters = np.array([0 for i in range(num_drones)])
-
-    #### Create the environment with or without video capture ##
-    if vision: 
-        env = VisionAviary(drone_model=drone,
-                           num_drones=num_drones,
-                           initial_xyzs=INIT_XYZS,
-                           initial_rpys=INIT_RPYS,
-                           physics=physics,
-                           neighbourhood_radius=10,
-                           freq=simulation_freq_hz,
-                           aggregate_phy_steps=AGGR_PHY_STEPS,
-                           gui=gui,
-                           record=record_video,
-                           obstacles=obstacles
-                           )
-    else: 
-        env = CtrlAviary(drone_model=drone,
-                         num_drones=num_drones,
-                         initial_xyzs=INIT_XYZS,
-                         initial_rpys=INIT_RPYS,
-                         physics=physics,
-                         neighbourhood_radius=10,
-                         freq=simulation_freq_hz,
-                         aggregate_phy_steps=AGGR_PHY_STEPS,
-                         gui=gui,
-                         record=record_video,
-                         obstacles=obstacles,
-                         user_debug_gui=user_debug_gui
-                         )
+    #### Create an envorinment with video capture
+    env = VisionAviary(drone_model=drone,
+                        num_drones=num_drones,
+                        initial_xyzs=INIT_XYZS,
+                        initial_rpys=INIT_RPYS,
+                        physics=physics,
+                        neighbourhood_radius=10,
+                        freq=simulation_freq_hz,
+                        aggregate_phy_steps=AGGR_PHY_STEPS,
+                        gui=gui,
+                        record=record_video,
+                        obstacles=obstacles
+                        )
+    
+    env._addObstacles()
 
     #### Obtain the PyBullet Client ID from the environment ####
     PYB_CLIENT = env.getPyBulletClient()
@@ -154,9 +120,6 @@ def run(
     action = {str(i): np.array([0,0,0,0]) for i in range(num_drones)}
     START = time.time()
     for i in range(0, int(duration_sec*env.SIM_FREQ), AGGR_PHY_STEPS):
-
-        #### Make it rain rubber ducks #############################
-        # if i/env.SIM_FREQ>5 and i%10==0 and i/env.SIM_FREQ<10: p.loadURDF("duck_vhacd.urdf", [0+random.gauss(0, 0.3),-0.5+random.gauss(0, 0.3),3], p.getQuaternionFromEuler([random.randint(0,360),random.randint(0,360),random.randint(0,360)]), physicsClientId=PYB_CLIENT)
 
         #### Step the simulation ###################################
         obs, reward, done, info = env.step(action)
@@ -213,23 +176,4 @@ def run(
         logger.plot()
 
 if __name__ == "__main__":
-    #### Define and parse (optional) arguments for the script ##
-    parser = argparse.ArgumentParser(description='Helix flight script using CtrlAviary or VisionAviary and DSLPIDControl')
-    parser.add_argument('--drone',              default=DEFAULT_DRONES,     type=DroneModel,    help='Drone model (default: CF2X)', metavar='', choices=DroneModel)
-    parser.add_argument('--num_drones',         default=DEFAULT_NUM_DRONES,          type=int,           help='Number of drones (default: 3)', metavar='')
-    parser.add_argument('--physics',            default=DEFAULT_PHYSICS,      type=Physics,       help='Physics updates (default: PYB)', metavar='', choices=Physics)
-    parser.add_argument('--vision',             default=DEFAULT_VISION,      type=str2bool,      help='Whether to use VisionAviary (default: False)', metavar='')
-    parser.add_argument('--gui',                default=DEFAULT_GUI,       type=str2bool,      help='Whether to use PyBullet GUI (default: True)', metavar='')
-    parser.add_argument('--record_video',       default=DEFAULT_RECORD_VISION,      type=str2bool,      help='Whether to record a video (default: False)', metavar='')
-    parser.add_argument('--plot',               default=DEFAULT_PLOT,       type=str2bool,      help='Whether to plot the simulation results (default: True)', metavar='')
-    parser.add_argument('--user_debug_gui',     default=DEFAULT_USER_DEBUG_GUI,      type=str2bool,      help='Whether to add debug lines and parameters to the GUI (default: False)', metavar='')
-    parser.add_argument('--aggregate',          default=DEFAULT_AGGREGATE,       type=str2bool,      help='Whether to aggregate physics steps (default: True)', metavar='')
-    parser.add_argument('--obstacles',          default=DEFAULT_OBSTACLES,       type=str2bool,      help='Whether to add obstacles to the environment (default: True)', metavar='')
-    parser.add_argument('--simulation_freq_hz', default=DEFAULT_SIMULATION_FREQ_HZ,        type=int,           help='Simulation frequency in Hz (default: 240)', metavar='')
-    parser.add_argument('--control_freq_hz',    default=DEFAULT_CONTROL_FREQ_HZ,         type=int,           help='Control frequency in Hz (default: 48)', metavar='')
-    parser.add_argument('--duration_sec',       default=DEFAULT_DURATION_SEC,         type=int,           help='Duration of the simulation in seconds (default: 5)', metavar='')
-    parser.add_argument('--output_folder',     default=DEFAULT_OUTPUT_FOLDER, type=str,           help='Folder where to save logs (default: "results")', metavar='')
-    parser.add_argument('--colab',              default=DEFAULT_COLAB, type=bool,           help='Whether example is being run by a notebook (default: "False")', metavar='')
-    ARGS = parser.parse_args()
-
-    run(**vars(ARGS))
+    run()
