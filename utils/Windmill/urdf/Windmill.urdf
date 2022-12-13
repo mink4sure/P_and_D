@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="Windmill">
+  <link
+    name="base_link">
+    <inertial>
+      <origin
+        xyz="-7.1007E-20 2.3843E-17 0.28127"
+        rpy="0 0 0" />
+      <mass
+        value="55.504" />
+      <inertia
+        ixx="2.2896"
+        ixy="-1.5461E-17"
+        ixz="1.6403E-16"
+        iyy="2.6332"
+        iyz="-7.4112E-17"
+        izz="0.92172" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Windmill/meshes/base_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 0 0 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Windmill/meshes/base_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <link
+    name="Blade_Link">
+    <inertial>
+      <origin
+        xyz="4.4409E-16 -4.996E-16 0.21151"
+        rpy="0 0 0" />
+      <mass
+        value="34.923" />
+      <inertia
+        ixx="2.3776"
+        ixy="1.1685E-14"
+        ixz="-7.9801E-16"
+        iyy="2.3776"
+        iyz="6.6901E-16"
+        izz="4.4898" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Windmill/meshes/Blade_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.96863 0.25882 0.25882 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Windmill/meshes/Blade_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="Joint_1"
+    type="continuous">
+    <origin
+      xyz="0 0 0.675"
+      rpy="-1.5708 -1.5478 3.1416" />
+    <parent
+      link="base_link" />
+    <child
+      link="Blade_Link" />
+    <axis
+      xyz="0 0 1" />
+  </joint>
+</robot>
