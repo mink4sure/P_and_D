@@ -35,7 +35,7 @@ from gym_pybullet_drones.utils.Logger import Logger
 from gym_pybullet_drones.utils.utils import sync, str2bool
 
 # Importing own environment
-import env as environment
+from TestAviary import TestAviary
 
 DEFAULT_DRONES = DroneModel("cf2x")
 DEFAULT_NUM_DRONES = 3
@@ -81,7 +81,7 @@ def run(
 
 
     #### Create an envorinment with video capture
-    env = environment.TestAviary(drone_model=drone,
+    env = TestAviary(drone_model=drone,
                         num_drones=num_drones,
                         initial_xyzs=INIT_XYZS,
                         initial_rpys=INIT_RPYS,
