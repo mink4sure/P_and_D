@@ -8,6 +8,7 @@ from gym_pybullet_drones.utils.enums import DroneModel
 
 # For MPC control
 import do_mpc
+import cvxpy as cp
 
 class MPC(BaseControl):
     """PID control class for Crazyflies.
@@ -78,11 +79,7 @@ class MPC(BaseControl):
                        target_vel=np.zeros(3),
                        target_rpy_rates=np.zeros(3)
                        ):
-        """Computes the PID control action (as RPMs) for a single drone.
-
-        This methods sequentially calls `_dslPIDPositionControl()` and `_dslPIDAttitudeControl()`.
-        Parameter `cur_ang_vel` is unused.
-
+        """
         Parameters
         ----------
         control_timestep : float
@@ -114,99 +111,60 @@ class MPC(BaseControl):
             The current yaw error.
 
         """
-        self.control_counter += 1
-        thrust, computed_target_rpy, pos_e = self._MPCPositionControl(control_timestep,
-                                                                         cur_pos,
-                                                                         cur_quat,
-                                                                         cur_vel,
-                                                                         target_pos,
-                                                                         target_rpy,
-                                                                         target_vel
-                                                                         )
-        
-        rpm = self._MPCAttitudeControl(control_timestep,
-                                          thrust,
-                                          cur_quat,
-                                          computed_target_rpy,
-                                          target_rpy_rates
-                                          )
-        cur_rpy = p.getEulerFromQuaternion(cur_quat)
-        return rpm, pos_e, computed_target_rpy[2] - cur_rpy[2]
+
+        N = 20      # MPC Horizon
+        N_x = 13    # Size of state vector
+        N_u = 4     # Size of control vector
+
+        weight_input = 0.2*np.eye(N_u)    # Weight on the input
+        weight_tracking = 1.0*np.eye(N_x) # Weight on the tracking state
+
+        cost = 0.
+        constraints = []
     
-    ################################################################################
+        # Create the optimization variables
+        x = cp.Variable((2, N + 1)) # cp.Variable((dim_1, dim_2))
+        u = cp.Variable((1, N))
 
-    def _MPCPositionControl(self,
-                               control_timestep,
-                               cur_pos,
-                               cur_quat,
-                               cur_vel,
-                               target_pos,
-                               target_rpy,
-                               target_vel
-                               ):
-        """DSL's CF2.x PID position control.
+        # Converting current rotation Quat to een Rotations matrix
+        cur_rpy = np.zeros((3, 1))
 
-        Parameters
-        ----------
-        control_timestep : float
-            The time step at which control is computed.
-        cur_pos : ndarray
-            (3,1)-shaped array of floats containing the current position.
-        cur_quat : ndarray
-            (4,1)-shaped array of floats containing the current orientation as a quaternion.
-        cur_vel : ndarray
-            (3,1)-shaped array of floats containing the current velocity.
-        target_pos : ndarray
-            (3,1)-shaped array of floats containing the desired position.
-        target_rpy : ndarray
-            (3,1)-shaped array of floats containing the desired orientation as roll, pitch, yaw.
-        target_vel : ndarray
-            (3,1)-shaped array of floats containing the desired velocity.
+        # Converting individual arrays into a single array for
+        # inital and target state
+        x_init = np.vstack((cur_pos, cur_rpy, cur_vel, cur_ang_vel))
+        x_target = np.vstack((target_pos, target_rpy, target_vel, target_rpy_rates))    
 
-        Returns
-        -------
-        float
-            The target thrust along the drone z-axis.
-        ndarray
-            (3,1)-shaped array of floats containing the target roll, pitch, and yaw.
-        float
-            The current position error.
+        # HINTS: 
+    # -----------------------------
+    # - To add a constraint use
+    #   constraints += [<constraint>] 
+    #   i.e., to specify x <= 0, we would use 'constraints += [x <= 0]'
+    # - To add to the cost, you can simply use
+    #   'cost += <value>'
+    # - Use @ to multiply matrices and vectors (i.e., 'A@x' if A is a matrix and x is a vector)
+    # - A useful function to know is cp.quad_form(x, M) which implements x^T M x (do not use it for scalar x!)
+    # - Use x[:, k] to retrieve x_k
+  
+        # For each stage in k = 0, ..., N-1
+        for k in range(N):
+            # Cost
+            e = x[:, k] - x_target
+            cost += cp.quad_form(e, weight_tracking) + cp.quad_form(u[:, k], weight_input)
 
-        """
-        return thrust, target_euler, pos_e
+            
+            # constrains
+            constraints += [x[:, k+1] == vehicle.A @ x[:, k] + vehicle.B @ u[:,k]]
+
+            #print(cost)
     
-    ################################################################################
+    
+    
+        # EXERCISE: Implement the cost components and/or constraints that need to be added once, here
+        # constrains
+        constraints += [x[:, 0] == x_init]
 
-    def _MPCAttitudeControl(self,
-                               control_timestep,
-                               thrust,
-                               cur_quat,
-                               target_euler,
-                               target_rpy_rates
-                               ):
-        """DSL's CF2.x PID attitude control.
 
-        Parameters
-        ----------
-        control_timestep : float
-            The time step at which control is computed.
-        thrust : float
-            The target thrust along the drone z-axis.
-        cur_quat : ndarray
-            (4,1)-shaped array of floats containing the current orientation as a quaternion.
-        target_euler : ndarray
-            (3,1)-shaped array of floats containing the computed target Euler angles.
-        target_rpy_rates : ndarray
-            (3,1)-shaped array of floats containing the desired roll, pitch, and yaw rates.
-
-        Returns
-        -------
-        ndarray
-            (4,1)-shaped array of integers containing the RPMs to apply to each of the 4 motors.
-
-        """
-
-        return self.PWM2RPM_SCALE * pwm + self.PWM2RPM_CONST
+        return rpm
     
     ################################################################################
 
