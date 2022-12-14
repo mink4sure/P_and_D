@@ -198,6 +198,7 @@ class MPC(BaseControl):
     def _QuatToRot(self, quat):
         #normalize quat
         quat = quat / np.sqrt(sum(quat**2))
+        q_hat = np.zeros((3,3))
 		
         q_hat[0,1] = -quat[3]
         q_hat[0,2] = quat[2]
