@@ -27,8 +27,8 @@ import pybullet as p
 import matplotlib.pyplot as plt
 
 from gym_pybullet_drones.utils.enums import DroneModel, Physics
-from gym_pybullet_drones.envs.CtrlAviary import CtrlAviary
-from gym_pybullet_drones.envs.VisionAviary import VisionAviary
+#from gym_pybullet_drones.envs.CtrlAviary import CtrlAviary
+from TestAviary import TestAviary as VisionAviary
 from Control import DSLPIDControl
 from gym_pybullet_drones.control.SimplePIDControl import SimplePIDControl
 from gym_pybullet_drones.utils.Logger import Logger
@@ -37,7 +37,7 @@ from gym_pybullet_drones.utils.utils import sync, str2bool
 DEFAULT_DRONES = DroneModel("cf2x")
 DEFAULT_NUM_DRONES = 3
 DEFAULT_PHYSICS = Physics("pyb")
-DEFAULT_VISION = False
+DEFAULT_VISION = True
 DEFAULT_GUI = True
 DEFAULT_RECORD_VISION = False
 DEFAULT_PLOT = True
