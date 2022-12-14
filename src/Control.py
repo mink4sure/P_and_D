@@ -112,8 +112,11 @@ class MPC(BaseControl):
 
         """
 
+        #print("Manual trouble shooting: ", cur_pos.T)
+
+
         N = 20      # MPC Horizon
-        N_x = 13    # Size of state vector
+        N_x = 12    # Size of state vector
         N_u = 4     # Size of control vector
 
         weight_input = 0.2*np.eye(N_u)    # Weight on the input
@@ -123,16 +126,27 @@ class MPC(BaseControl):
         constraints = []
     
         # Create the optimization variables
-        x = cp.Variable((2, N + 1)) # cp.Variable((dim_1, dim_2))
-        u = cp.Variable((1, N))
+        x = cp.Variable((N_x, N + 1)) # cp.Variable((dim_1, dim_2))
+        u = cp.Variable((N_u, N))
 
         # Converting current rotation Quat to een Rotations matrix
-        cur_rpy = np.zeros((3, 1))
+        cur_rpy = np.zeros((3))
 
         # Converting individual arrays into a single array for
         # inital and target state
-        x_init = np.vstack((cur_pos, cur_rpy, cur_vel, cur_ang_vel))
-        x_target = np.vstack((target_pos, target_rpy, target_vel, target_rpy_rates))    
+        x_init = np.concatenate((cur_pos, cur_rpy, cur_vel, cur_ang_vel))
+        x_target = np.concatenate((target_pos, target_rpy, target_vel, target_rpy_rates))    
+
+        #print("Manual trouble shooting: ", x_target)
+
+        # Matrices for system dynamics
+        A = np.zeros((N_x, N_x))
+        A[0:3, 6:9] = np.eye(3)
+        A[3:6, 9:] = np.eye(3)
+
+        B = np.zeros((N_x, N_u))
+
+
 
         # HINTS: 
     # -----------------------------
@@ -153,7 +167,7 @@ class MPC(BaseControl):
 
             
             # constrains
-            constraints += [x[:, k+1] == vehicle.A @ x[:, k] + vehicle.B @ u[:,k]]
+            #constraints += [x[:, k+1] == vehicle.A @ x[:, k] + vehicle.B @ u[:,k]]
 
             #print(cost)
     
@@ -167,7 +181,16 @@ class MPC(BaseControl):
         problem = cp.Problem(cp.Minimize(cost), constraints)
         problem.solve(solver=cp.OSQP)
 
-        return u[:, 0]
+
+        rpm = np.zeros(4)
+        rpm[0] = u[0, 0]
+        rpm[1] = u[1, 0]
+        rpm[2] = u[2, 0]
+        rpm[3] = u[3, 0]
+        print("Manual trouble shooting: ", rpm)
+        #print("Manual trouble shooting: ", u[:, 0])
+
+        return rpm
     
     ################################################################################
 
