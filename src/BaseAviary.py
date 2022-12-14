@@ -948,11 +948,6 @@ class BaseAviary(gym.Env):
                    physicsClientId=self.CLIENT
                    )
 
-        p.loadURDF("utils/Windmill/urdf/Windmill.urdf",
-                   [0, 0, 0],
-                   p.getQuaternionFromEuler([0, 0, 0]),
-                   physicsClientId=self.CLIENT
-                   )
 
     
     ################################################################################
