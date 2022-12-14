@@ -163,8 +163,11 @@ class MPC(BaseControl):
         # constrains
         constraints += [x[:, 0] == x_init]
 
+         # Solves the problem
+        problem = cp.Problem(cp.Minimize(cost), constraints)
+        problem.solve(solver=cp.OSQP)
 
-        return rpm
+        return u[:, 0]
     
     ################################################################################
 
@@ -199,6 +202,7 @@ class MPC(BaseControl):
         #normalize quat
         quat = quat / np.sqrt(sum(quat**2))
 		
+
         q_hat[0,1] = -quat[3]
         q_hat[0,2] = quat[2]
         q_hat[1,2] = -quat[1]
