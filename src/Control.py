@@ -6,7 +6,10 @@ from scipy.spatial.transform import Rotation
 from gym_pybullet_drones.control.BaseControl import BaseControl
 from gym_pybullet_drones.utils.enums import DroneModel
 
-class DSLPIDControl(BaseControl):
+# For MPC control
+import do_mpc
+
+class MPC(BaseControl):
     """PID control class for Crazyflies.
 
     Based on work conducted at UTIAS' DSL. Contributors: SiQi Zhou, James Xu, 
@@ -34,12 +37,7 @@ class DSLPIDControl(BaseControl):
         if self.DRONE_MODEL != DroneModel.CF2X and self.DRONE_MODEL != DroneModel.CF2P:
             print("[ERROR] in DSLPIDControl.__init__(), DSLPIDControl requires DroneModel.CF2X or DroneModel.CF2P")
             exit()
-        self.P_COEFF_FOR = np.array([.4, .4, 1.25])
-        self.I_COEFF_FOR = np.array([.05, .05, .05])
-        self.D_COEFF_FOR = np.array([.2, .2, .5])
-        self.P_COEFF_TOR = np.array([70000., 70000., 60000.])
-        self.I_COEFF_TOR = np.array([.0, .0, 500.])
-        self.D_COEFF_TOR = np.array([20000., 20000., 12000.])
+
         self.PWM2RPM_SCALE = 0.2685
         self.PWM2RPM_CONST = 4070.3
         self.MIN_PWM = 20000
@@ -117,7 +115,7 @@ class DSLPIDControl(BaseControl):
 
         """
         self.control_counter += 1
-        thrust, computed_target_rpy, pos_e = self._dslPIDPositionControl(control_timestep,
+        thrust, computed_target_rpy, pos_e = self._MPCPositionControl(control_timestep,
                                                                          cur_pos,
                                                                          cur_quat,
                                                                          cur_vel,
@@ -126,7 +124,7 @@ class DSLPIDControl(BaseControl):
                                                                          target_vel
                                                                          )
         
-        rpm = self._dslPIDAttitudeControl(control_timestep,
+        rpm = self._MPCAttitudeControl(control_timestep,
                                           thrust,
                                           cur_quat,
                                           computed_target_rpy,
@@ -137,7 +135,7 @@ class DSLPIDControl(BaseControl):
     
     ################################################################################
 
-    def _dslPIDPositionControl(self,
+    def _MPCPositionControl(self,
                                control_timestep,
                                cur_pos,
                                cur_quat,
@@ -179,7 +177,7 @@ class DSLPIDControl(BaseControl):
     
     ################################################################################
 
-    def _dslPIDAttitudeControl(self,
+    def _MPCAttitudeControl(self,
                                control_timestep,
                                thrust,
                                cur_quat,

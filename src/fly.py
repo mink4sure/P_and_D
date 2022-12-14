@@ -26,10 +26,12 @@ import numpy as np
 import pybullet as p
 import matplotlib.pyplot as plt
 
+# added some comments to allow for branching
+
 from gym_pybullet_drones.utils.enums import DroneModel, Physics
 #from gym_pybullet_drones.envs.CtrlAviary import CtrlAviary
 from TestAviary import TestAviary as VisionAviary
-from Control import DSLPIDControl
+from Control import MPC
 from gym_pybullet_drones.control.SimplePIDControl import SimplePIDControl
 from gym_pybullet_drones.utils.Logger import Logger
 from gym_pybullet_drones.utils.utils import sync, str2bool
@@ -145,7 +147,7 @@ def run(
 
     #### Initialize the controllers ############################
     if drone in [DroneModel.CF2X, DroneModel.CF2P]:
-        ctrl = [DSLPIDControl(drone_model=drone) for i in range(num_drones)]
+        ctrl = [MPC(drone_model=drone) for i in range(num_drones)]
     elif drone in [DroneModel.HB]:
         ctrl = [SimplePIDControl(drone_model=drone) for i in range(num_drones)]
 
