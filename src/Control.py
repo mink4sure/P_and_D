@@ -125,6 +125,7 @@ class DSLPIDControl(BaseControl):
                                                                          target_rpy,
                                                                          target_vel
                                                                          )
+        
         rpm = self._dslPIDAttitudeControl(control_timestep,
                                           thrust,
                                           cur_quat,
@@ -174,27 +175,6 @@ class DSLPIDControl(BaseControl):
             The current position error.
 
         """
-        cur_rotation = np.array(p.getMatrixFromQuaternion(cur_quat)).reshape(3, 3)
-        pos_e = target_pos - cur_pos
-        vel_e = target_vel - cur_vel
-        self.integral_pos_e = self.integral_pos_e + pos_e*control_timestep
-        self.integral_pos_e = np.clip(self.integral_pos_e, -2., 2.)
-        self.integral_pos_e[2] = np.clip(self.integral_pos_e[2], -0.15, .15)
-        #### PID target thrust #####################################
-        target_thrust = np.multiply(self.P_COEFF_FOR, pos_e) \
-                        + np.multiply(self.I_COEFF_FOR, self.integral_pos_e) \
-                        + np.multiply(self.D_COEFF_FOR, vel_e) + np.array([0, 0, self.GRAVITY])
-        scalar_thrust = max(0., np.dot(target_thrust, cur_rotation[:,2]))
-        thrust = (math.sqrt(scalar_thrust / (4*self.KF)) - self.PWM2RPM_CONST) / self.PWM2RPM_SCALE
-        target_z_ax = target_thrust / np.linalg.norm(target_thrust)
-        target_x_c = np.array([math.cos(target_rpy[2]), math.sin(target_rpy[2]), 0])
-        target_y_ax = np.cross(target_z_ax, target_x_c) / np.linalg.norm(np.cross(target_z_ax, target_x_c))
-        target_x_ax = np.cross(target_y_ax, target_z_ax)
-        target_rotation = (np.vstack([target_x_ax, target_y_ax, target_z_ax])).transpose()
-        #### Target rotation #######################################
-        target_euler = (Rotation.from_matrix(target_rotation)).as_euler('XYZ', degrees=False)
-        if np.any(np.abs(target_euler) > math.pi):
-            print("\n[ERROR] ctrl it", self.control_counter, "in Control._dslPIDPositionControl(), values outside range [-pi,pi]")
         return thrust, target_euler, pos_e
     
     ################################################################################
@@ -227,25 +207,7 @@ class DSLPIDControl(BaseControl):
             (4,1)-shaped array of integers containing the RPMs to apply to each of the 4 motors.
 
         """
-        cur_rotation = np.array(p.getMatrixFromQuaternion(cur_quat)).reshape(3, 3)
-        cur_rpy = np.array(p.getEulerFromQuaternion(cur_quat))
-        target_quat = (Rotation.from_euler('XYZ', target_euler, degrees=False)).as_quat()
-        w,x,y,z = target_quat
-        target_rotation = (Rotation.from_quat([w, x, y, z])).as_matrix()
-        rot_matrix_e = np.dot((target_rotation.transpose()),cur_rotation) - np.dot(cur_rotation.transpose(),target_rotation)
-        rot_e = np.array([rot_matrix_e[2, 1], rot_matrix_e[0, 2], rot_matrix_e[1, 0]]) 
-        rpy_rates_e = target_rpy_rates - (cur_rpy - self.last_rpy)/control_timestep
-        self.last_rpy = cur_rpy
-        self.integral_rpy_e = self.integral_rpy_e - rot_e*control_timestep
-        self.integral_rpy_e = np.clip(self.integral_rpy_e, -1500., 1500.)
-        self.integral_rpy_e[0:2] = np.clip(self.integral_rpy_e[0:2], -1., 1.)
-        #### PID target torques ####################################
-        target_torques = - np.multiply(self.P_COEFF_TOR, rot_e) \
-                         + np.multiply(self.D_COEFF_TOR, rpy_rates_e) \
-                         + np.multiply(self.I_COEFF_TOR, self.integral_rpy_e)
-        target_torques = np.clip(target_torques, -3200, 3200)
-        pwm = thrust + np.dot(self.MIXER_MATRIX, target_torques)
-        pwm = np.clip(pwm, self.MIN_PWM, self.MAX_PWM)
+
         return self.PWM2RPM_SCALE * pwm + self.PWM2RPM_CONST
     
     ################################################################################
