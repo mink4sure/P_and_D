@@ -235,3 +235,18 @@ class MPC(BaseControl):
         else:
             print("[ERROR] in DSLPIDControl._one23DInterface()")
             exit()
+    
+    
+	def _QuatToRot(self, quat):
+		#normalize quat
+		quat = quat / np.sqrt(sum(quat**2))
+		
+		q_hat[0,1] = -q[3]
+		q_hat[0,2] = q[2]
+		q_hat[1,2] = -q[1]
+		q_hat[1,0] = q[3]
+		q_hat[2,0] = -q[2]
+		q_hat[2,1] = q[1]
+		
+		return np.eye(3) + 2*q_hat*q_hat + 2*q[0]*q_hat
+	
