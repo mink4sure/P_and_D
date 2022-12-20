@@ -1,6 +1,6 @@
 import math
 import numpy as np
-import pybullet as p
+import pybullet
 from scipy.spatial.transform import Rotation
 
 from gym_pybullet_drones.control.BaseControl import BaseControl
@@ -10,15 +10,6 @@ from gym_pybullet_drones.utils.enums import DroneModel
 import casadi
 
 class MPC(BaseControl):
-    """PID control class for Crazyflies.
-
-    Based on work conducted at UTIAS' DSL. Contributors: SiQi Zhou, James Xu, 
-    Tracy Du, Mario Vukosavljev, Calvin Ngan, and Jingyuan Hou.
-
-    """
-
-    ################################################################################
-
     def __init__(self,
                  drone_model: DroneModel,
                  g: float=9.8
@@ -135,7 +126,7 @@ class MPC(BaseControl):
         dt = control_timestep
 
         # Converting current rotation Quat to een Rotations matrix
-        cur_rpy = np.zeros((3))
+        cur_rpy = np.array(pybullet.getEulerFromQuaternion(cur_quat))
 
         # Setting horizon distance
         horizon = 20
