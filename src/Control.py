@@ -7,8 +7,7 @@ from gym_pybullet_drones.control.BaseControl import BaseControl
 from gym_pybullet_drones.utils.enums import DroneModel
 
 # For MPC control
-import do_mpc
-import cvxpy as cp
+import casadi
 
 class MPC(BaseControl):
     """PID control class for Crazyflies.
@@ -38,6 +37,8 @@ class MPC(BaseControl):
         if self.DRONE_MODEL != DroneModel.CF2X and self.DRONE_MODEL != DroneModel.CF2P:
             print("[ERROR] in DSLPIDControl.__init__(), DSLPIDControl requires DroneModel.CF2X or DroneModel.CF2P")
             exit()
+
+        self.g = g
 
         self.PWM2RPM_SCALE = 0.2685
         self.PWM2RPM_CONST = 4070.3
@@ -112,83 +113,86 @@ class MPC(BaseControl):
 
         """
 
-        #print("Manual trouble shooting: ", cur_pos.T)
+        '''
+        opti = casadi.Opti()
+
+        x = opti.variable()
+        y = opti.variable()
+
+        opti.minimize(  (y-x**2)**2   )
+        opti.subject_to( x**2+y**2==1 )
+        opti.subject_to(       x+y>=1 )
+
+        opti.solver('ipopt')
 
 
-        N = 20      # MPC Horizon
-        N_x = 12    # Size of state vector
-        N_u = 4     # Size of control vector
+        sol = opti.solve()
 
-        weight_input = 0.2*np.eye(N_u)    # Weight on the input
-        weight_tracking = 1.0*np.eye(N_x) # Weight on the tracking state
+        print(sol.value(x))
+        print(sol.value(y))
+        '''
 
-        cost = 0.
-        constraints = []
-    
-        # Create the optimization variables
-        x = cp.Variable((N_x, N + 1)) # cp.Variable((dim_1, dim_2))
-        u = cp.Variable((N_u, N))
+        dt = control_timestep
 
         # Converting current rotation Quat to een Rotations matrix
         cur_rpy = np.zeros((3))
 
-        # Converting individual arrays into a single array for
-        # inital and target state
-        x_init = np.concatenate((cur_pos, cur_rpy, cur_vel, cur_ang_vel))
-        x_target = np.concatenate((target_pos, target_rpy, target_vel, target_rpy_rates))    
+        # Setting horizon distance
+        horizon = 20
+        
+        # Creating the optimizer object
+        opti = casadi.Opti()
 
-        #print("Manual trouble shooting: ", x_target)
+        # setting the variables
+        p = opti.variable(3, horizon)   # Position
+        v = opti.variable(3, horizon)   # Velocity
+        o = opti.variable(3, horizon)   # Orientation: phi, theta, psi
+        w = opti.variable(1, horizon)   # Yaw rate
+        u = opti.variable(4, horizon)   # Control input: phi_d, theta_d, yaw_rate_d, vertical velocity
+        
+        obj = 0
 
-        # Matrices for system dynamics
-        A = np.zeros((N_x, N_x))
-        A[0:3, 6:9] = np.eye(3)
-        A[3:6, 9:] = np.eye(3)
+        
+        for k in range(horizon-1):
+            # Cost for each step
+            obj += p[:, k] - target_pos
 
-        B = np.zeros((N_x, N_u))
+            # Constrains for each step
+            # dynamics
+            phi = o[0, k]
+            theta = o[1, k]
+            psi = o[2, k]
 
+            T_z = 0.3367
+            T_phi = 0.2386
+            T_theta = 0.2386
+            K_z = 1.227
+            K_phi = 1.0181
+            K_theta = 1.0167
 
+            opti.subject_to([p[:, k+1] == p[:, k] + dt * v[:, k],   # position update
+                            v[0, k+1] == v[0, k] + dt * self.g * np.tan(theta)/np.cos(phi),   # x Velocity
+                            v[1, k+1] == v[1, k] + dt * self.g * np.tan(phi),    # y Velocity
+                            v[2, k+1] == v[2, k] + dt * (K_z*u[3, k] - v[2, k])/T_z,    # z Velocity
+                            o[0, k+1] == o[0, k] + dt * (K_phi*u[0, k] - phi)/T_phi,
+                            o[1, k+1] == o[1, k] + dt * (K_theta*u[1, k] - theta)/T_theta,
+                            o[2, k+1] == o[2, k] + dt * w[k],
+                            w[k+1] == u[2, k] ])
 
-        # HINTS: 
-    # -----------------------------
-    # - To add a constraint use
-    #   constraints += [<constraint>] 
-    #   i.e., to specify x <= 0, we would use 'constraints += [x <= 0]'
-    # - To add to the cost, you can simply use
-    #   'cost += <value>'
-    # - Use @ to multiply matrices and vectors (i.e., 'A@x' if A is a matrix and x is a vector)
-    # - A useful function to know is cp.quad_form(x, M) which implements x^T M x (do not use it for scalar x!)
-    # - Use x[:, k] to retrieve x_k
-  
-        # For each stage in k = 0, ..., N-1
-        for k in range(N):
-            # Cost
-            e = x[:, k] - x_target
-            cost += cp.quad_form(e, weight_tracking) + cp.quad_form(u[:, k], weight_input)
+        # Single time cost
+        obj += 0
 
-            
-            # constrains
-            #constraints += [x[:, k+1] == vehicle.A @ x[:, k] + vehicle.B @ u[:,k]]
+        # Single time contrains
+        opti.subject_to([p[:, 0] == cur_pos,
+                        v[:, 0] == cur_vel,
+                        o[:, 0] == cur_rpy])
+        
+        opti.solver('ipopt')
+        sol = opti.solve()
+        
+        print("Found controll values: ", sol.value(u)[:, 0])
 
-            #print(cost)
-    
-    
-    
-        # EXERCISE: Implement the cost components and/or constraints that need to be added once, here
-        # constrains
-        constraints += [x[:, 0] == x_init]
-
-         # Solves the problem
-        problem = cp.Problem(cp.Minimize(cost), constraints)
-        problem.solve(solver=cp.OSQP)
-
-
-        rpm = np.zeros(4)
-        rpm[0] = u[0, 0]
-        rpm[1] = u[1, 0]
-        rpm[2] = u[2, 0]
-        rpm[3] = u[3, 0]
-        print("Manual trouble shooting: ", rpm)
-        #print("Manual trouble shooting: ", u[:, 0])
+        rpm = [0, 0, 0, 0]
 
         return rpm
     
