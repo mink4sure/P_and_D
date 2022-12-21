@@ -136,11 +136,11 @@ class MPC(BaseControl):
         opti = casadi.Opti()
 
         # setting the variables
-        p = opti.variable('p', 3, horizon)   # Position
-        v = opti.variable('v', 3, horizon)   # Velocity
-        o = opti.variable('o', 3, horizon)   # Orientation: phi, theta, psi
-        w = opti.variable('w', 3, horizon)   # angulair velocity: d_phi, d_theta, d_psi
-        u = opti.variable('u', 4, horizon)   # Control input: w1, w2, w3, w4
+        p = opti.variable(3, horizon)   # Position
+        v = opti.variable(3, horizon)   # Velocity
+        o = opti.variable(3, horizon)   # Orientation: phi, theta, psi
+        w = opti.variable(3, horizon)   # angulair velocity: d_phi, d_theta, d_psi
+        u = opti.variable(4, horizon)   # Control input: w1, w2, w3, w4
 
         obj = 0
 
@@ -164,16 +164,16 @@ class MPC(BaseControl):
             #wb = some_R@w[:, k]
 
             # get force of rotors in global frame
-            thrust_b = casadi.SX.zeros(3,1)
+            thrust_b = casadi.MX.zeros(3,1)
             for i in range(4):
-                print(u[i, k])
-                print(u[i, k].shape)
                 thrust_b[2, 0] += u[i, k] 
             
             thrust = R_b_to_a @ thrust_b
 
             # Cost for each step
-            obj += p[:, k] - target_pos
+            obj += (p[0, k] - target_pos[0])**2
+            obj += (p[1, k] - target_pos[1])**2
+            obj += (p[2, k] - target_pos[2])**2
 
             # Constrains for each step
             # Dynamics: In the global frame
@@ -192,7 +192,9 @@ class MPC(BaseControl):
                         v[:, 0] == cur_vel,
                         o[:, 0] == cur_rpy])
         
+
         opti.solver('ipopt')
+        opti.minimize(obj)
         sol = opti.solve()
         
         print("Found controll values: ", sol.value(u)[:, 0])
