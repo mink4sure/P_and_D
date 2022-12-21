@@ -146,43 +146,39 @@ class MPC(BaseControl):
 
         
         for k in range(horizon-1):
-            # Rotation matric from Drone to Global
-            temp_R_a_to_b = np.array(pybullet.getMatrixFromQuaternion(cur_quat)).reshape(3, 3)  # Hopefully rotation of drone written in Global frame basis
-            R_a_to_b = casadi.DM(3,3)
-            R_a_to_b = temp_R_a_to_b
-            
-            R_b_to_a = R_a_to_b.T
-
-            phi = o[0, k]
-            theta = o[1, k]
-            psi = o[2, k]
-
-            """ some_R = casadi.DX([[np.cos(theta), 0, -np.cos(psi)*np.sin(theta)],
-                               [0, 1, np.sin(phi)],
-                               [np.sin(theta), 0, np.cos(phi) * np.cos(theta)]])
- """
-            #wb = some_R@w[:, k]
-
-            # get force of rotors in global frame
-            thrust_b = casadi.MX.zeros(3,1)
-            for i in range(4):
-                thrust_b[2, 0] += u[i, k] 
-            
-            thrust = R_b_to_a @ thrust_b
-
             # Cost for each step
             obj += (p[0, k] - target_pos[0])**2
             obj += (p[1, k] - target_pos[1])**2
             obj += (p[2, k] - target_pos[2])**2
 
+            # Rotation matric from Drone to Global
+            temp_R_a_to_b = np.array(pybullet.getMatrixFromQuaternion(cur_quat)).reshape(3, 3)  # Hopefully rotation of drone written in Global frame basis
+            R_a_to_b = casadi.DM(3,3)
+            R_a_to_b = temp_R_a_to_b
+        
+            R_b_to_a = R_a_to_b.T
+
+            # Total thrust of the 4 motord combined
+            thrust_b = casadi.MX.zeros(3,1)
+            for i in range(4):
+                thrust_b[2, 0] += u[i, k]**2 * self.KF 
+            
+            thrust_a = R_b_to_a @ thrust_b
+            print("thrust: ", thrust_a)
+
+            force_a = np.array([0, 0, -self.g*self.m]) + thrust_a
+
+            # 
+
             # Constrains for each step
             # Dynamics: In the global frame
             opti.subject_to([
                             p[:, k+1] == p[:, k] + dt * v[:, k],
-                            v[:, k+1] == v[:, k] + dt * (np.array([0, 0, -self.g]) + thrust),
+                            v[:, k+1] == v[:, k] + dt * force_a/self.m,
                             o[:, k+1] == o[:, k] + dt * w[:, k]
 
                             ])
+        ############################################################
 
         # Single time cost
         obj += 0
@@ -197,9 +193,9 @@ class MPC(BaseControl):
         opti.minimize(obj)
         sol = opti.solve()
         
-        print("Found controll values: ", sol.value(u)[:, 0])
+        rpm = sol.value(u)[:, 0]
 
-        rpm = [0, 0, 0, 0]
+        print("Found controll values: ", rpm)
 
         return rpm
     
