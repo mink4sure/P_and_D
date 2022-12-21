@@ -29,8 +29,14 @@ class MPC(BaseControl):
             print("[ERROR] in DSLPIDControl.__init__(), DSLPIDControl requires DroneModel.CF2X or DroneModel.CF2P")
             exit()
 
+        # Getting parameters for drone control
         self.g = g
         self.m = self._getURDFParameter('m')
+        self.l = self._getURDFParameter('arm')
+        Ixx = self._getURDFParameter('ixx')
+        Iyy = self._getURDFParameter('iyy')
+        Izz = self._getURDFParameter('izz')
+        self.I = np.diag([Ixx, Iyy, Izz])
 
         self.PWM2RPM_SCALE = 0.2685
         self.PWM2RPM_CONST = 4070.3
@@ -158,7 +164,7 @@ class MPC(BaseControl):
         
             R_b_to_a = R_a_to_b.T
 
-            # Total thrust of the 4 motord combined
+            # Total thrust of the 4 motord combined (in the global frame)
             thrust_b = casadi.MX.zeros(3,1)
             for i in range(4):
                 thrust_b[2, 0] += u[i, k]**2 * self.KF 
@@ -168,15 +174,34 @@ class MPC(BaseControl):
 
             force_a = np.array([0, 0, -self.g*self.m]) + thrust_a
 
-            # 
+            # Total moment in the body frame
+            M_b = casadi.MX.zeros(3,1)
+            M_b[0, 0] = self.l * self.KF * (u[1, k]**2 - u[3, k]**2)
+            M_b[1, 0] = self.l * self.KF * (u[2, k]**2 - u[0, k]**2)
+            M_b[2, 0] = self.KM * (u[0, k]**2 - u[1, k]**2 + u[2, k]**2 - u[3, k]**2)
+
+            # calcultating rate of change of the momentum
+            temp_I_inv = np.linalg.inv(self.I)
+            I = casadi.DM(3, 3)
+            I = self.I
+            I_inv = casadi.DM(3, 3)
+            I_inv = temp_I_inv
+
+            print('I', I)
+            print('I_inv',I_inv)
+
+            w_b = R_a_to_b @ w[:, k]
+            dw_b = I_inv @ (M_b - w_b * (I @ w_b))
+
+            dw_a = R_b_to_a @ dw_b
 
             # Constrains for each step
             # Dynamics: In the global frame
             opti.subject_to([
                             p[:, k+1] == p[:, k] + dt * v[:, k],
                             v[:, k+1] == v[:, k] + dt * force_a/self.m,
-                            o[:, k+1] == o[:, k] + dt * w[:, k]
-
+                            o[:, k+1] == o[:, k] + dt * w[:, k],
+                            w[:, k+1] == w[:, k] + dt * dw_a
                             ])
         ############################################################
 
