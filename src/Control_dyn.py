@@ -149,6 +149,7 @@ class MPC(BaseControl):
         u = opti.variable(4, horizon)   # Control input: w1, w2, w3, w4
 
         obj = 0
+        K = 10
 
         
         for k in range(horizon-1):
@@ -156,6 +157,7 @@ class MPC(BaseControl):
             obj += (p[0, k] - target_pos[0])**2
             obj += (p[1, k] - target_pos[1])**2
             obj += (p[2, k] - target_pos[2])**2
+            
 
             # Rotation matric from Drone to Global
             temp_R_a_to_b = np.array(pybullet.getMatrixFromQuaternion(cur_quat)).reshape(3, 3)  # Hopefully rotation of drone written in Global frame basis
@@ -168,9 +170,10 @@ class MPC(BaseControl):
             thrust_b = casadi.MX.zeros(3,1)
             for i in range(4):
                 thrust_b[2, 0] += u[i, k]**2 * self.KF 
-            
+            print("thrust b: ", thrust_b)
+
             thrust_a = R_b_to_a @ thrust_b
-            print("thrust: ", thrust_a)
+            print("thrust a: ", thrust_a)
 
             force_a = np.array([0, 0, -self.g*self.m]) + thrust_a
 
@@ -187,8 +190,8 @@ class MPC(BaseControl):
             I_inv = casadi.DM(3, 3)
             I_inv = temp_I_inv
 
-            print('I', I)
-            print('I_inv',I_inv)
+            #print('I', I)
+            #print('I_inv',I_inv)
 
             w_b = R_a_to_b @ w[:, k]
             dw_b = I_inv @ (M_b - w_b * (I @ w_b))
@@ -206,7 +209,7 @@ class MPC(BaseControl):
         ############################################################
 
         # Single time cost
-        obj += 0
+        #obj = (p[0, -1] - target_pos[0])**2 + (p[1, -1] - target_pos[1])**2 + (p[2, -1] - target_pos[2])**2 
 
         # Single time contrains
         opti.subject_to([p[:, 0] == cur_pos,
@@ -218,6 +221,8 @@ class MPC(BaseControl):
         opti.minimize(obj)
         sol = opti.solve()
         
+        print(sol.value(u))
+
         rpm = sol.value(u)[:, 0]
 
         print("Found controll values: ", rpm)
