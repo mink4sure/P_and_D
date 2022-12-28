@@ -133,13 +133,14 @@ class MPC(BaseControl):
         print(sol.value(y))
         '''
 
-        dt = control_timestep
+        
 
         # Converting current rotation Quat to een Rotations matrix
         cur_rpy = np.array(pybullet.getEulerFromQuaternion(cur_quat))
 
         # Setting horizon distance
-        horizon = 20
+        horizon = 5
+        dt = control_timestep
         
         # Creating the optimizer object
         opti = casadi.Opti()
@@ -154,7 +155,7 @@ class MPC(BaseControl):
         obj = 0
 
         # Max input (max rmp = 10000)
-        RPM_max = 30000
+        RPM_max = 40000
         omega_max = RPM_max * 2 * np.pi
         F_max = self.KF * RPM_max**2
 
@@ -163,9 +164,16 @@ class MPC(BaseControl):
 
         for k in range(horizon-1):
             # Cost for each step
-            obj += (p[0, k] - target_pos[0])**2
-            obj += (p[1, k] - target_pos[1])**2
-            obj += (p[2, k] - target_pos[2])**2
+            Kv = 5
+            obj += Kv * (p[0, k] - target_pos[0])**2
+            obj += Kv * (p[1, k] - target_pos[1])**2
+            obj += Kv * (p[2, k] - target_pos[2])**2
+            """ obj += v[0, k]**2 / Kv
+            obj += v[1, k]**2 / Kv
+            obj += v[2, k]**2 / Kv """
+            #obj += casadi.sin(o[0, k] - target_rpy[0])
+            #obj += casadi.sin(o[1, k] - target_rpy[1])
+            #obj += casadi.sin(o[2, k] - target_rpy[2])
 
 
             # Control
@@ -197,14 +205,17 @@ class MPC(BaseControl):
             temp_F = inv_f @ u[:, k]
             
             # Constrains
+            dddeg = 3
+            deg = 8
+            max_v = 1
             opti.subject_to([
                             #u[0, k] <= 4 * F_max,
                             #u[1, k] <= F_max,
                             #u[2, k] <= F_max,
                             #u[3, k] <= 2 * F_max,
-                            #v[0, k] <= 0.5, 
-                            #v[1, k] <= 0.5, 
-                            #v[2, k] <= 0.5,
+                            v[0, k] <= max_v, 
+                            v[1, k] <= max_v,
+                            v[2, k] <= max_v,
                             temp_F[0] >= 0,
                             temp_F[1] >= 0, 
                             temp_F[2] >= 0,
@@ -212,7 +223,19 @@ class MPC(BaseControl):
                             temp_F[0] <= F_max,
                             temp_F[1] <= F_max, 
                             temp_F[2] <= F_max, 
-                            temp_F[3] <= F_max, 
+                            temp_F[3] <= F_max,
+                            ddphi <= dddeg,
+                            ddphi >= -dddeg,
+                            ddtheta <= dddeg,
+                            ddtheta >= -dddeg,
+                            ddpsi <= dddeg,
+                            ddpsi >= -dddeg,
+                            phi <= deg,
+                            phi >= -deg,
+                            theta <= deg,
+                            theta >= -deg,
+                            psi <= deg,
+                            psi >= -deg
                             ])
 
         ############################################################
@@ -233,9 +256,17 @@ class MPC(BaseControl):
         print(sol.value(u))
 
         F = inv_f @ sol.value(u)[:, 0]
-        print('Found forces: ', F)
-        rpm = (F/self.KF)**(0.5)
+        rpm_t = np.zeros(4)
+        for i in range(4):
+            if F[i] > 0:
+                rpm_t[i] = (F[i]/self.KF)**(0.5)
+            else:
+                rpm_t[i] = 0
 
+        lst = [0,1,2,3]
+        rpm = np.array([rpm_t[lst[0]], rpm_t[lst[1]], rpm_t[lst[2]], rpm_t[lst[3]]])
+
+        print('Found forces: ', F)
         print("Found RPM: ", rpm)
 
         return rpm
