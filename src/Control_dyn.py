@@ -153,6 +153,14 @@ class MPC(BaseControl):
 
         obj = 0
 
+        # Max input (max rmp = 10000)
+        RPM_max = 30000
+        omega_max = RPM_max * 2 * np.pi
+        F_max = self.KF * RPM_max**2
+
+        inv_f = casadi.DM(4, 4)
+        inv_f = np.linalg.inv(self.f)
+
         for k in range(horizon-1):
             # Cost for each step
             obj += (p[0, k] - target_pos[0])**2
@@ -185,6 +193,28 @@ class MPC(BaseControl):
                             w[1, k+1] == w[1, k] + dt * ddtheta,
                             w[2, k+1] == w[2, k] + dt * ddpsi,
                             ])
+
+            temp_F = inv_f @ u[:, k]
+            
+            # Constrains
+            opti.subject_to([
+                            #u[0, k] <= 4 * F_max,
+                            #u[1, k] <= F_max,
+                            #u[2, k] <= F_max,
+                            #u[3, k] <= 2 * F_max,
+                            #v[0, k] <= 0.5, 
+                            #v[1, k] <= 0.5, 
+                            #v[2, k] <= 0.5,
+                            temp_F[0] >= 0,
+                            temp_F[1] >= 0, 
+                            temp_F[2] >= 0,
+                            temp_F[3] >= 0,
+                            temp_F[0] <= F_max,
+                            temp_F[1] <= F_max, 
+                            temp_F[2] <= F_max, 
+                            temp_F[3] <= F_max, 
+                            ])
+
         ############################################################
 
         # Single time cost
@@ -202,11 +232,11 @@ class MPC(BaseControl):
         
         print(sol.value(u))
 
-        f = casadi.DX
+        F = inv_f @ sol.value(u)[:, 0]
+        print('Found forces: ', F)
+        rpm = (F/self.KF)**(0.5)
 
-        rpm = sol.value(u)[:, 0]
-
-        print("Found controll values: ", rpm)
+        print("Found RPM: ", rpm)
 
         return rpm
     
