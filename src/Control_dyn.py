@@ -36,6 +36,10 @@ class MPC(BaseControl):
         self.Ixx = self._getURDFParameter('ixx')
         self.Iyy = self._getURDFParameter('iyy')
         self.Izz = self._getURDFParameter('izz')
+        self.f = np.array([[1, 1, 1, 1],
+                            [0, -1, 0, 1],
+                            [-1, 0, 1, 0],
+                            [1, -1, 1, -1]])
 
         self.PWM2RPM_SCALE = 0.2685
         self.PWM2RPM_CONST = 4070.3
@@ -197,6 +201,8 @@ class MPC(BaseControl):
         sol = opti.solve()
         
         print(sol.value(u))
+
+        f = casadi.DX
 
         rpm = sol.value(u)[:, 0]
 
