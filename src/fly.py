@@ -31,7 +31,8 @@ import matplotlib.pyplot as plt
 from gym_pybullet_drones.utils.enums import DroneModel, Physics
 #from gym_pybullet_drones.envs.CtrlAviary import CtrlAviary
 from TestAviary import TestAviary as VisionAviary
-from Control import MPC
+from Control_dyn import MPC
+#from Control import MPC
 from gym_pybullet_drones.control.SimplePIDControl import SimplePIDControl
 from gym_pybullet_drones.utils.Logger import Logger
 from gym_pybullet_drones.utils.utils import sync, str2bool
