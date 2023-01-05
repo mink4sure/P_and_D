@@ -159,12 +159,15 @@ class MPC(BaseControl):
         omega_max = RPM_max * 2 * np.pi
         F_max = self.KF * RPM_max**2
 
+        dRPM_max = 1000
+        dF_max = self.KF * 2 * dRPM_max
+
         inv_f = casadi.DM(4, 4)
         inv_f = np.linalg.inv(self.f)
 
         for k in range(horizon-1):
             # Cost for each step
-            Kv = 5
+            Kv = 10
             obj += Kv * (p[0, k] - target_pos[0])**2
             obj += Kv * (p[1, k] - target_pos[1])**2
             obj += Kv * (p[2, k] - target_pos[2])**2
@@ -181,13 +184,13 @@ class MPC(BaseControl):
             theta = o[1, k]
             psi = o[2, k]
 
-            ddx = 1/self.m * u[0, k] * casadi.sin(theta)
-            ddy = 1/self.m * u[0, k] * casadi.sin(phi)
-            ddz = 1/self.m * u[0, k] - self.g
+            ddx = (u[0, k] * casadi.sin(theta)) / self.m
+            ddy = (u[0, k] * casadi.sin(phi)) / self.m
+            ddz = u[0, k] / self.m - self.g
 
-            ddphi = 1/self.Ixx * u[2, k] * self.l
-            ddtheta = 1/self.Iyy * u[1, k] * self.l
-            ddpsi = 1/self.Ixx * u[3, k] * self.KM/self.KF
+            ddphi = (u[2, k] * self.l) / self.Ixx
+            ddtheta = (u[1, k] * self.l) / self.Iyy
+            ddpsi = (u[3, k] * self.KM/self.KF) / self.Ixx
 
             # Constrains for each step
             # Dynamics: In the global frame
@@ -202,7 +205,8 @@ class MPC(BaseControl):
                             w[2, k+1] == w[2, k] + dt * ddpsi,
                             ])
 
-            temp_F = inv_f @ u[:, k]
+            temp_F_k = inv_f @ u[:, k]
+            temp_F_kp1 = inv_f @ u[:, k+1]
             
             # Constrains
             dddeg = 3
@@ -213,23 +217,36 @@ class MPC(BaseControl):
                             #u[1, k] <= F_max,
                             #u[2, k] <= F_max,
                             #u[3, k] <= 2 * F_max,
+                            # setting a max Speed
                             v[0, k] <= max_v, 
                             v[1, k] <= max_v,
                             v[2, k] <= max_v,
-                            temp_F[0] >= 0,
-                            temp_F[1] >= 0, 
-                            temp_F[2] >= 0,
-                            temp_F[3] >= 0,
-                            temp_F[0] <= F_max,
-                            temp_F[1] <= F_max, 
-                            temp_F[2] <= F_max, 
-                            temp_F[3] <= F_max,
+                           
+                            # setting min and max producable forces
+                            temp_F_k[0] >= 0,
+                            temp_F_k[1] >= 0, 
+                            temp_F_k[2] >= 0,
+                            temp_F_k[3] >= 0,
+                            temp_F_k[0] <= F_max,
+                            temp_F_k[1] <= F_max, 
+                            temp_F_k[2] <= F_max, 
+                            temp_F_k[3] <= F_max,
+
+                            # setting a maximum rate fo chane for the actuators
+                            (temp_F_k[0] - temp_F_kp1[0])**2 <= dF_max,
+                            (temp_F_k[1] - temp_F_kp1[0])**2 <= dF_max, 
+                            (temp_F_k[2] - temp_F_kp1[0])**2 <= dF_max, 
+                            (temp_F_k[3] - temp_F_kp1[0])**2 <= dF_max,
+                            
+                            # setting a max rate of change for the anlges
                             ddphi <= dddeg,
                             ddphi >= -dddeg,
                             ddtheta <= dddeg,
                             ddtheta >= -dddeg,
                             ddpsi <= dddeg,
                             ddpsi >= -dddeg,
+                            
+                            # Setting maximum angles
                             phi <= deg,
                             phi >= -deg,
                             theta <= deg,
@@ -255,6 +272,8 @@ class MPC(BaseControl):
         
         print(sol.value(u))
 
+        # Storing the input solution into F and converting it to RPM
+        # not allowing any negative RPM
         F = inv_f @ sol.value(u)[:, 0]
         rpm_t = np.zeros(4)
         for i in range(4):
@@ -263,6 +282,7 @@ class MPC(BaseControl):
             else:
                 rpm_t[i] = 0
 
+        # Maybe switch around whith motor recieves what RPM (Not sure what the used definition is)
         lst = [0,1,2,3]
         rpm = np.array([rpm_t[lst[0]], rpm_t[lst[1]], rpm_t[lst[2]], rpm_t[lst[3]]])
 

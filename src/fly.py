@@ -29,13 +29,15 @@ import matplotlib.pyplot as plt
 # added some comments to allow for branching
 
 from gym_pybullet_drones.utils.enums import DroneModel, Physics
-#from gym_pybullet_drones.envs.CtrlAviary import CtrlAviary
-from TestAviary import TestAviary as VisionAviary
 from Control_dyn import MPC
 #from Control import MPC
 from gym_pybullet_drones.control.SimplePIDControl import SimplePIDControl
 from gym_pybullet_drones.utils.Logger import Logger
 from gym_pybullet_drones.utils.utils import sync, str2bool
+
+# Importing own environment
+from TestAviary import TestAviary
+
 
 DEFAULT_DRONES = DroneModel("cf2x")
 DEFAULT_NUM_DRONES = 1
@@ -108,33 +110,22 @@ def run(
     # wp_counters = np.array([0 for i in range(num_drones)])
 
     #### Create the environment with or without video capture ##
-    if vision: 
-        env = VisionAviary(drone_model=drone,
-                           num_drones=num_drones,
-                           initial_xyzs=INIT_XYZS,
-                           initial_rpys=INIT_RPYS,
-                           physics=physics,
-                           neighbourhood_radius=10,
-                           freq=simulation_freq_hz,
-                           aggregate_phy_steps=AGGR_PHY_STEPS,
-                           gui=gui,
-                           record=record_video,
-                           obstacles=obstacles
-                           )
-    else: 
-        env = CtrlAviary(drone_model=drone,
-                         num_drones=num_drones,
-                         initial_xyzs=INIT_XYZS,
-                         initial_rpys=INIT_RPYS,
-                         physics=physics,
-                         neighbourhood_radius=10,
-                         freq=simulation_freq_hz,
-                         aggregate_phy_steps=AGGR_PHY_STEPS,
-                         gui=gui,
-                         record=record_video,
-                         obstacles=obstacles,
-                         user_debug_gui=user_debug_gui
-                         )
+    
+    env = TestAviary(drone_model=drone,
+                        num_drones=num_drones,
+                        initial_xyzs=INIT_XYZS,
+                        initial_rpys=INIT_RPYS,
+                        physics=physics,
+                        neighbourhood_radius=10,
+                        freq=simulation_freq_hz,
+                        aggregate_phy_steps=AGGR_PHY_STEPS,
+                        gui=gui,
+                        record=record_video,
+                        obstacles=obstacles
+                        )
+    
+    #env._addObstacles()
+
 
     #### Obtain the PyBullet Client ID from the environment ####
     PYB_CLIENT = env.getPyBulletClient()
@@ -171,7 +162,7 @@ def run(
             for j in range(num_drones):
                 action[str(j)] = ctrl[j].computeControlFromState(control_timestep=CTRL_EVERY_N_STEPS*env.TIMESTEP,
                                                                        state=obs[str(j)]["state"],
-                                                                       target_pos=np.array([0, 0, 1]),
+                                                                       target_pos=np.array([0.1, 0, 1]),
                                                                        # target_pos=INIT_XYZS[j, :] + TARGET_POS[wp_counters[j], :],
                                                                        target_rpy=INIT_RPYS[j, :]
                                                                        )
