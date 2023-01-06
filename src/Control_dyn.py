@@ -37,13 +37,16 @@ class MPC(BaseControl):
         self.Iyy = self._getURDFParameter('iyy')
         self.Izz = self._getURDFParameter('izz')
         self.f = np.array([[1, 1, 1, 1],
-                            [0, -1, 0, 1],
-                            [-1, 0, 1, 0],
+                            [1, 0, -1, 0],
+                            [0, 1, 0, -1],
                             [1, -1, 1, -1]])
+        self.rotZ = np.sqrt(2)/2 * np.array([[1, -1, 0],
+                                             [1, 1, 0],
+                                             [0, 0, 2/np.sqrt(2)]])
 
         self.PWM2RPM_SCALE = 0.2685
         self.PWM2RPM_CONST = 4070.3
-        self.MIN_PWM = 20000
+        self.MIN_PWM = 20000    
         self.MAX_PWM = 65535
         if self.DRONE_MODEL == DroneModel.CF2X:
             self.MIXER_MATRIX = np.array([ [.5, -.5,  -1], [.5, .5, 1], [-.5,  .5,  -1], [-.5, -.5, 1] ])
@@ -112,34 +115,10 @@ class MPC(BaseControl):
         float
             The current yaw error.
 
-        """
-
-        '''
-        opti = casadi.Opti()
-
-        x = opti.variable()
-        y = opti.variable()
-
-        opti.minimize(  (y-x**2)**2   )
-        opti.subject_to( x**2+y**2==1 )
-        opti.subject_to(       x+y>=1 )
-
-        opti.solver('ipopt')
-
-
-        sol = opti.solve()
-
-        print(sol.value(x))
-        print(sol.value(y))
-        '''
-
-        
-
-        # Converting current rotation Quat to een Rotations matrix
-        cur_rpy = np.array(pybullet.getEulerFromQuaternion(cur_quat))
+        """       
 
         # Setting horizon distance
-        horizon = 5
+        horizon = 10
         dt = control_timestep
         
         # Creating the optimizer object
@@ -154,29 +133,45 @@ class MPC(BaseControl):
 
         obj = 0
 
-        # Max input (max rmp = 10000)
+        # Calculating max producable force given max RPM
         RPM_max = 40000
         omega_max = RPM_max * 2 * np.pi
         F_max = self.KF * RPM_max**2
 
+        # Calculating max rate fo change of force given max dRPM
         dRPM_max = 1000
         dF_max = self.KF * 2 * dRPM_max
 
+        # Getting the matrix to convert input U into F
         inv_f = casadi.DM(4, 4)
         inv_f = np.linalg.inv(self.f)
 
+        # Converting current rotation Quat to een Rotations matrix
+        cur_rpy = np.array(pybullet.getEulerFromQuaternion(cur_quat))
+        
+        # Getting rotation matrix to alling body frame with inertial axis
+        rotZ = casadi.DM(3, 3)
+        rotZ = self.rotZ
+
+        cur_rpy = rotZ@cur_rpy
+        target_rpy = self.rotZ@target_rpy
+
+        print('rpy thingies')
+        print(cur_rpy)
+        print(target_rpy)
+
         for k in range(horizon-1):
             # Cost for each step
-            Kv = 10
+            Kv = 1
             obj += Kv * (p[0, k] - target_pos[0])**2
             obj += Kv * (p[1, k] - target_pos[1])**2
             obj += Kv * (p[2, k] - target_pos[2])**2
             """ obj += v[0, k]**2 / Kv
             obj += v[1, k]**2 / Kv
             obj += v[2, k]**2 / Kv """
-            #obj += casadi.sin(o[0, k] - target_rpy[0])
-            #obj += casadi.sin(o[1, k] - target_rpy[1])
-            #obj += casadi.sin(o[2, k] - target_rpy[2])
+            obj += casadi.sin(o[0, k] - target_rpy[0])
+            obj += casadi.sin(o[1, k] - target_rpy[1])
+            obj += casadi.sin(o[2, k] - target_rpy[2])
 
 
             # Control
@@ -184,22 +179,28 @@ class MPC(BaseControl):
             theta = o[1, k]
             psi = o[2, k]
 
-            ddx = (u[0, k] * casadi.sin(theta)) / self.m
-            ddy = (u[0, k] * casadi.sin(phi)) / self.m
-            ddz = u[0, k] / self.m - self.g
+            ddx = (-u[0, k] * (casadi.sin(psi)*casadi.sin(phi) 
+                    + casadi.cos(psi)*casadi.sin(theta) * casadi.cos(phi))) / self.m
+            ddy = (-u[0, k] * (casadi.sin(psi)*casadi.sin(theta)*casadi.cos(phi)
+                    - casadi.cos(psi)*casadi.sin(phi))) / self.m
+            ddz = (u[0, k]*(casadi.cos(psi)*casadi.cos(theta))) / self.m - self.g
 
             ddphi = (u[2, k] * self.l) / self.Ixx
             ddtheta = (u[1, k] * self.l) / self.Iyy
-            ddpsi = (u[3, k] * self.KM/self.KF) / self.Ixx
+            ddpsi = (u[3, k] * self.KM/self.KF) / self.Izz
 
             # Constrains for each step
             # Dynamics: In the global frame
             opti.subject_to([
-                            p[:, k+1] == p[:, k] + dt * v[:, k],
+                            p[0, k+1] == p[0, k] + dt * v[0, k],
+                            p[1, k+1] == p[1, k] + dt * v[1, k],
+                            p[2, k+1] == p[2, k] + dt * v[2, k],
                             v[0, k+1] == v[0, k] + dt * ddx, 
                             v[1, k+1] == v[1, k] + dt * ddy, 
                             v[2, k+1] == v[2, k] + dt * ddz, 
-                            o[:, k+1] == o[:, k] + dt * w[:, k],
+                            o[0, k+1] == o[0, k] + dt * w[0, k],
+                            o[1, k+1] == o[1, k] + dt * w[1, k],
+                            o[2, k+1] == o[2, k] + dt * w[2, k],
                             w[0, k+1] == w[0, k] + dt * ddphi,
                             w[1, k+1] == w[1, k] + dt * ddtheta,
                             w[2, k+1] == w[2, k] + dt * ddpsi,
@@ -209,8 +210,8 @@ class MPC(BaseControl):
             temp_F_kp1 = inv_f @ u[:, k+1]
             
             # Constrains
-            dddeg = 3
-            deg = 8
+            dddeg = 5
+            deg = 5
             max_v = 1
             opti.subject_to([
                             #u[0, k] <= 4 * F_max,
@@ -227,10 +228,10 @@ class MPC(BaseControl):
                             temp_F_k[1] >= 0, 
                             temp_F_k[2] >= 0,
                             temp_F_k[3] >= 0,
-                            temp_F_k[0] <= F_max,
-                            temp_F_k[1] <= F_max, 
-                            temp_F_k[2] <= F_max, 
-                            temp_F_k[3] <= F_max,
+                            #temp_F_k[0] <= F_max,
+                            #temp_F_k[1] <= F_max, 
+                            #temp_F_k[2] <= F_max, 
+                            #temp_F_k[3] <= F_max,
 
                             # setting a maximum rate fo chane for the actuators
                             (temp_F_k[0] - temp_F_kp1[0])**2 <= dF_max,
@@ -239,12 +240,12 @@ class MPC(BaseControl):
                             (temp_F_k[3] - temp_F_kp1[0])**2 <= dF_max,
                             
                             # setting a max rate of change for the anlges
-                            ddphi <= dddeg,
-                            ddphi >= -dddeg,
-                            ddtheta <= dddeg,
-                            ddtheta >= -dddeg,
-                            ddpsi <= dddeg,
-                            ddpsi >= -dddeg,
+                            #ddphi <= dddeg,
+                            #ddphi >= -dddeg,
+                            #ddtheta <= dddeg,
+                            #ddtheta >= -dddeg,
+                            #ddpsi <= dddeg,
+                            #ddpsi >= -dddeg,
                             
                             # Setting maximum angles
                             phi <= deg,
@@ -270,7 +271,7 @@ class MPC(BaseControl):
         opti.minimize(obj)
         sol = opti.solve()
         
-        print(sol.value(u))
+        #print(sol.value(o))
 
         # Storing the input solution into F and converting it to RPM
         # not allowing any negative RPM
@@ -283,8 +284,10 @@ class MPC(BaseControl):
                 rpm_t[i] = 0
 
         # Maybe switch around whith motor recieves what RPM (Not sure what the used definition is)
-        lst = [0,1,2,3]
-        rpm = np.array([rpm_t[lst[0]], rpm_t[lst[1]], rpm_t[lst[2]], rpm_t[lst[3]]])
+        lst = [0, 1, 2, 3]
+        rpm = np.array([rpm_t[lst[0]], rpm_t[lst[1]], rpm_t[lst[2]], rpm_t[lst[3]]], dtype=int)
+
+        #rpm = np.array([0, 0, 10000, 0])
 
         print('Found forces: ', F)
         print("Found RPM: ", rpm)
