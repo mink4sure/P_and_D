@@ -36,10 +36,16 @@ class MPC(BaseControl):
         self.Ixx = self._getURDFParameter('ixx')
         self.Iyy = self._getURDFParameter('iyy')
         self.Izz = self._getURDFParameter('izz')
-        self.f = np.array([[1, 1, 1, 1],
-                            [1, 0, -1, 0],
-                            [0, 1, 0, -1],
-                            [1, -1, 1, -1]])
+        
+        # f is defined as U = f @ F so the following
+        # interpretations can be made in combination with
+        # the used dynamical equations
+        self.f = np.array([[1, 1, 1, 1],    # Total thust of the system
+                            [-1, 0, 1, 0],  # Forces that cause a rotation theta (around y-axis)
+                            [0, 1, 0, -1],  # Forces that cause a rotation phi (around x-axis)
+                            [1, -1, 1, -1]])# Relationship between produced forces and resulting
+                                            # moments about the z-axis (related to angle psi)
+
         self.rotZ = np.sqrt(2)/2 * np.array([[1, -1, 0],
                                              [1, 1, 0],
                                              [0, 0, 2/np.sqrt(2)]])
@@ -117,8 +123,10 @@ class MPC(BaseControl):
 
         """       
 
+        print("target pos: ", target_pos)
+
         # Setting horizon distance
-        horizon = 10
+        horizon = 5
         dt = control_timestep
         
         # Creating the optimizer object
@@ -153,37 +161,54 @@ class MPC(BaseControl):
         rotZ = casadi.DM(3, 3)
         rotZ = self.rotZ
 
+        # Checking rotation matrix: Look's good!
+        #print(self.rotZ)
+        #print(rotZ)
+
+        # Get orientations in bodyfrme allinged with axis of inertia
         cur_rpy = rotZ@cur_rpy
         target_rpy = self.rotZ@target_rpy
 
-        print('rpy thingies')
-        print(cur_rpy)
-        print(target_rpy)
+        #print('rpy thingies')
+        #print(cur_rpy)
+        #print(target_rpy)
 
         for k in range(horizon-1):
-            # Cost for each step
+            # Giving the angles names for simplicity
+            phi = o[0, k]
+            theta = o[1, k]
+            psi = o[2, k]
+            
+
+            ### COST ###
+            # Cost for position tracking
             Kv = 1
             obj += Kv * (p[0, k] - target_pos[0])**2
             obj += Kv * (p[1, k] - target_pos[1])**2
             obj += Kv * (p[2, k] - target_pos[2])**2
-            """ obj += v[0, k]**2 / Kv
-            obj += v[1, k]**2 / Kv
-            obj += v[2, k]**2 / Kv """
-            obj += casadi.sin(o[0, k] - target_rpy[0])
-            obj += casadi.sin(o[1, k] - target_rpy[1])
-            obj += casadi.sin(o[2, k] - target_rpy[2])
+            
+            #print('Check on position error X: ', (p[0, k] - target_pos[0])**2)
+            #print('Check on position error Z: ', (p[2, k] - target_pos[2])**2)
+            #print(target_pos[0])
 
+            # Cost for keeping Yaw == 0
+            #obj += casadi.sin(psi)**2
+            #obj += psi**2
+            obj += casadi.cos(psi)
 
-            # Control
-            phi = o[0, k]
-            theta = o[1, k]
-            psi = o[2, k]
-
-            ddx = (-u[0, k] * (casadi.sin(psi)*casadi.sin(phi) 
+            
+            
+            ### CONTROL ###
+            # Calculating  second order derivatives based on the paper
+            ddx = (u[0, k] * (casadi.sin(psi)*casadi.sin(phi) 
                     + casadi.cos(psi)*casadi.sin(theta) * casadi.cos(phi))) / self.m
-            ddy = (-u[0, k] * (casadi.sin(psi)*casadi.sin(theta)*casadi.cos(phi)
+            ddy = (u[0, k] * (casadi.sin(psi)*casadi.sin(theta)*casadi.cos(phi)
                     - casadi.cos(psi)*casadi.sin(phi))) / self.m
             ddz = (u[0, k]*(casadi.cos(psi)*casadi.cos(theta))) / self.m - self.g
+
+            #print("ddx: ", ddx)
+            #print("ddy: ", ddy)
+            #print("ddz: ", ddz)
 
             ddphi = (u[2, k] * self.l) / self.Ixx
             ddtheta = (u[1, k] * self.l) / self.Iyy
@@ -206,12 +231,13 @@ class MPC(BaseControl):
                             w[2, k+1] == w[2, k] + dt * ddpsi,
                             ])
 
+            # Converting inputs to forces to set constrains
             temp_F_k = inv_f @ u[:, k]
             temp_F_kp1 = inv_f @ u[:, k+1]
             
             # Constrains
-            dddeg = 5
-            deg = 5
+            dddeg = 5   # Constant for maximum rate of change
+            deg = 5     # Constraint for 
             max_v = 1
             opti.subject_to([
                             #u[0, k] <= 4 * F_max,
@@ -219,19 +245,19 @@ class MPC(BaseControl):
                             #u[2, k] <= F_max,
                             #u[3, k] <= 2 * F_max,
                             # setting a max Speed
-                            v[0, k] <= max_v, 
-                            v[1, k] <= max_v,
-                            v[2, k] <= max_v,
+                            #v[0, k] <= max_v, 
+                            #v[1, k] <= max_v,
+                            #v[2, k] <= max_v,
                            
                             # setting min and max producable forces
                             temp_F_k[0] >= 0,
                             temp_F_k[1] >= 0, 
                             temp_F_k[2] >= 0,
                             temp_F_k[3] >= 0,
-                            #temp_F_k[0] <= F_max,
-                            #temp_F_k[1] <= F_max, 
-                            #temp_F_k[2] <= F_max, 
-                            #temp_F_k[3] <= F_max,
+                            temp_F_k[0] <= F_max,
+                            temp_F_k[1] <= F_max, 
+                            temp_F_k[2] <= F_max, 
+                            temp_F_k[3] <= F_max,
 
                             # setting a maximum rate fo chane for the actuators
                             (temp_F_k[0] - temp_F_kp1[0])**2 <= dF_max,
@@ -248,12 +274,12 @@ class MPC(BaseControl):
                             #ddpsi >= -dddeg,
                             
                             # Setting maximum angles
-                            phi <= deg,
-                            phi >= -deg,
-                            theta <= deg,
-                            theta >= -deg,
-                            psi <= deg,
-                            psi >= -deg
+                            #phi <= deg,
+                            #phi >= -deg,
+                            #theta <= deg,
+                            #theta >= -deg,
+                            #psi <= 0.5,
+                            #psi >= -0.5
                             ])
 
         ############################################################
@@ -264,14 +290,15 @@ class MPC(BaseControl):
         # Single time contrains
         opti.subject_to([p[:, 0] == cur_pos,
                         v[:, 0] == cur_vel,
-                        o[:, 0] == cur_rpy])
+                        o[:, 0] == cur_rpy,
+                        w[:, 0] == cur_ang_vel])
         
 
         opti.solver('ipopt')
         opti.minimize(obj)
         sol = opti.solve()
         
-        #print(sol.value(o))
+        opti.debug.value(ddx)
 
         # Storing the input solution into F and converting it to RPM
         # not allowing any negative RPM
@@ -281,11 +308,12 @@ class MPC(BaseControl):
             if F[i] > 0:
                 rpm_t[i] = (F[i]/self.KF)**(0.5)
             else:
+                print('Negative force encountered :', F[i])
                 rpm_t[i] = 0
 
         # Maybe switch around whith motor recieves what RPM (Not sure what the used definition is)
         lst = [0, 1, 2, 3]
-        rpm = np.array([rpm_t[lst[0]], rpm_t[lst[1]], rpm_t[lst[2]], rpm_t[lst[3]]], dtype=int)
+        rpm = np.array([rpm_t[lst[0]], rpm_t[lst[1]], rpm_t[lst[2]], rpm_t[lst[3]]], dtype = int)
 
         #rpm = np.array([0, 0, 10000, 0])
 

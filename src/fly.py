@@ -51,7 +51,7 @@ DEFAULT_AGGREGATE = True
 DEFAULT_OBSTACLES = True
 DEFAULT_SIMULATION_FREQ_HZ = 240
 DEFAULT_CONTROL_FREQ_HZ = 48
-DEFAULT_DURATION_SEC = 12
+DEFAULT_DURATION_SEC = 5
 DEFAULT_OUTPUT_FOLDER = 'results'
 DEFAULT_COLAB = False
 
@@ -162,8 +162,8 @@ def run(
             for j in range(num_drones):
                 action[str(j)] = ctrl[j].computeControlFromState(control_timestep=CTRL_EVERY_N_STEPS*env.TIMESTEP,
                                                                        state=obs[str(j)]["state"],
-                                                                       target_pos=np.array([0.1, 0, 1]),
-                                                                       # target_pos=INIT_XYZS[j, :] + TARGET_POS[wp_counters[j], :],
+                                                                       target_pos=np.array([1, 0, .4]),
+                                                                       #target_pos=INIT_XYZS[j, :] + TARGET_POS[wp_counters[j], :],
                                                                        target_rpy=INIT_RPYS[j, :]
                                                                        )
 
