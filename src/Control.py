@@ -146,7 +146,9 @@ class MPC(BaseControl):
         
         for k in range(horizon-1):
             # Cost for each step
-            obj += p[:, k] - target_pos
+            obj += (p[0, k] - target_pos[0])**2
+            obj += (p[1, k] - target_pos[1])**2
+            obj += (p[2, k] - target_pos[2])**2
 
             # Constrains for each step
             # dynamics
@@ -179,6 +181,7 @@ class MPC(BaseControl):
                         o[:, 0] == cur_rpy])
         
         opti.solver('ipopt')
+        opti.minimize(obj)
         sol = opti.solve()
         
         print("Found controll values: ", sol.value(u)[:, 0])

@@ -29,7 +29,9 @@ import matplotlib.pyplot as plt
 # added some comments to allow for branching
 
 from gym_pybullet_drones.utils.enums import DroneModel, Physics
-from Control_dyn import MPC
+#from Control_dyn import MPC
+#from Control_GPT import MPC
+from Control_clean import MPC
 #from Control import MPC
 from gym_pybullet_drones.control.SimplePIDControl import SimplePIDControl
 from gym_pybullet_drones.utils.Logger import Logger
@@ -162,7 +164,7 @@ def run(
             for j in range(num_drones):
                 action[str(j)] = ctrl[j].computeControlFromState(control_timestep=CTRL_EVERY_N_STEPS*env.TIMESTEP,
                                                                        state=obs[str(j)]["state"],
-                                                                       target_pos=np.array([1, 0, .4]),
+                                                                       target_pos=np.array([0, 0, .1]),
                                                                        #target_pos=INIT_XYZS[j, :] + TARGET_POS[wp_counters[j], :],
                                                                        target_rpy=INIT_RPYS[j, :]
                                                                        )
