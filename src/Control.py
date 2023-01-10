@@ -6,7 +6,9 @@ from scipy.spatial.transform import Rotation
 from gym_pybullet_drones.control.BaseControl import BaseControl
 from gym_pybullet_drones.utils.enums import DroneModel
 
-class DSLPIDControl(BaseControl):
+import casadi as cs
+
+class PIDMPCControl(BaseControl):
     """PID control class for Crazyflies.
 
     Based on work conducted at UTIAS' DSL. Contributors: SiQi Zhou, James Xu, 
@@ -34,6 +36,12 @@ class DSLPIDControl(BaseControl):
         if self.DRONE_MODEL != DroneModel.CF2X and self.DRONE_MODEL != DroneModel.CF2P:
             print("[ERROR] in DSLPIDControl.__init__(), DSLPIDControl requires DroneModel.CF2X or DroneModel.CF2P")
             exit()
+
+        # MPC variables
+        self.horizon = 100
+        self.T = 1
+        self.Vmax = 1
+
         self.P_COEFF_FOR = np.array([.4, .4, 1.25])
         self.I_COEFF_FOR = np.array([.05, .05, .05])
         self.D_COEFF_FOR = np.array([.2, .2, .5])
@@ -116,14 +124,19 @@ class DSLPIDControl(BaseControl):
             The current yaw error.
 
         """
+
+        traject_pos, traject_vel = self._MPCtraject(cur_pos=cur_pos, cur_vel=cur_vel, target_pos=target_pos, dt_simulation=control_timestep)
+        print('current_pos: ', cur_pos)
+        print('traject_pos: ', traject_pos)
+
         self.control_counter += 1
         thrust, computed_target_rpy, pos_e = self._dslPIDPositionControl(control_timestep,
                                                                          cur_pos,
                                                                          cur_quat,
                                                                          cur_vel,
-                                                                         target_pos,
+                                                                         traject_pos,
                                                                          target_rpy,
-                                                                         target_vel
+                                                                         traject_vel
                                                                          )
         rpm = self._dslPIDAttitudeControl(control_timestep,
                                           thrust,
@@ -250,28 +263,42 @@ class DSLPIDControl(BaseControl):
     
     ################################################################################
 
-    def _one23DInterface(self,
-                         thrust
-                         ):
-        """Utility function interfacing 1, 2, or 3D thrust input use cases.
+    def _MPCtraject(self, cur_pos, cur_vel, target_pos, dt_simulation):
+        
+        dt = dt_simulation*self.T
 
-        Parameters
-        ----------
-        thrust : ndarray
-            Array of floats of length 1, 2, or 4 containing a desired thrust input.
+        ### SOLVER OBJECT AND VARIABLES###
+        opti = cs.Opti()
+        X = opti.variable(6, self.horizon + 1)
 
-        Returns
-        -------
-        ndarray
-            (4,1)-shaped array of integers containing the PWM (not RPMs) to apply to each of the 4 motors.
+        ### COST ###
+        obj = 0
+        for k in range(self.horizon):
+            #obj += (X[0:3, k] - target_pos).T @ (X[0:3, k] - target_pos)
+            obj += 1000 *  (X[0:3, k] - target_pos).T @ (X[0:3, k] - target_pos)
 
-        """
-        DIM = len(np.array(thrust))
-        pwm = np.clip((np.sqrt(np.array(thrust)/(self.KF*(4/DIM)))-self.PWM2RPM_CONST)/self.PWM2RPM_SCALE, self.MIN_PWM, self.MAX_PWM)
-        if DIM in [1, 4]:
-            return np.repeat(pwm, 4/DIM)
-        elif DIM==2:
-            return np.hstack([pwm, np.flip(pwm)])
-        else:
-            print("[ERROR] in DSLPIDControl._one23DInterface()")
-            exit()
+        
+        ### Initial position constraint ###
+        opti.subject_to([
+            X[0:3, 0] == cur_pos,
+            X[3:6, 0] == cur_vel
+        ])
+
+        ### Dynamics ###
+        for k in range(self.horizon):
+            opti.subject_to([
+                X[0:3, k+1] == X[0:3, k] + dt * X[3:6, k],
+           ])
+
+        ### Contrains ###
+        for k in range(self.horizon):
+            opti.subject_to([
+                X[3:6, k+1].T @ X[3:6, k+1] <= self.Vmax
+            ])
+
+        opti.solver('ipopt')
+        sol = opti.solve()
+
+        return sol.value(X)[0:3, 1], sol.value(X)[0:3, 1]
+
+
