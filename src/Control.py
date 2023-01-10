@@ -303,7 +303,7 @@ class PIDMPCControl(BaseControl):
         ### Contrains ###
         for k in range(1, self.horizon):
             opti.subject_to(X[3:6, k].T @ X[3:6, k] <= self.Vmax**2)
-            opti.subject_to(cs.sqrt((X[0:3, k] - obs1).T @ (X[0:3, k] - obs1)) >= 1)
+            opti.subject_to(cs.sqrt((X[0:3, k] - obs1).T @ (X[0:3, k] - obs1)) >= 1.5)
 
         opti.solver('ipopt')
         opti.minimize(obj)
