@@ -41,7 +41,7 @@ class PIDMPCControl(BaseControl):
         # MPC variables
         self.horizon = 24
         self.T = 10
-        self.Vmax = 1
+        self.Vmax = 0.5
 
         self.OBS = obstacles
 
@@ -281,12 +281,14 @@ class PIDMPCControl(BaseControl):
         X = opti.variable(6, self.horizon)
 
         ### COST ###
+        q = 80
         obj = 0
         obj += (X[0:3, -1] - target_pos).T @ (X[0:3, -1] - target_pos)
         for k in range(self.horizon):
             #obj += (X[0:3, k] - target_pos).T @ (X[0:3, k] - target_pos)
-            obj += (X[0:3, k] - target_pos).T @ (X[0:3, k] - target_pos)
-            obj += self._costCube(X[0:2, k])
+            obj += ((X[0:3, k] - target_pos).T @ (X[0:3, k] - target_pos))
+            obj += q * self._costGaussian(size=[1, 1, 1], pos=[0, 2, 0.5], X=X[:, k])
+            obj += q * self._costGaussian(size=[1, 1, 1], pos=[0, 2, 1.5], X=X[:, k])
 
         
         ### Initial position constraint ###
@@ -303,8 +305,11 @@ class PIDMPCControl(BaseControl):
 
         ### Contrains ###
         for k in range(1, self.horizon):
-            opti.subject_to(X[3:6, k].T @ X[3:6, k] <= self.Vmax**2)
-            opti.subject_to(cs.sqrt((X[0:3, k] - obs1).T @ (X[0:3, k] - obs1)) >= 1)
+            opti.subject_to([
+                X[3:6, k].T @ X[3:6, k] <= self.Vmax**2,
+                #X[2, k] >= 0.1
+                ])
+            #opti.subject_to(cs.sqrt((X[0:3, k] - obs1).T @ (X[0:3, k] - obs1)) >= 1)
 
         s_opts = {'max_iterations': 5000}
         opti.solver('ipopt')
@@ -317,4 +322,32 @@ class PIDMPCControl(BaseControl):
     def _costCube(self, X):
         r = (X[0])**2 + (X[1]-2)**2
         temp = -2000*(r)**2 + 100
-        return temp * cs.if_else(r >= 0.6, 1, 0)
+        return cs.fmax(temp, 0)
+
+    def _costCilinder(self, X):
+        r_cyl = 1
+        x_cyl = 0
+        y_cyl = 2
+        h_cyl = r_cyl**2 - (X[0]-x_cyl)**2 - (X[1]-y_cyl)**2
+        return cs.fmax(h_cyl, 0)
+
+    def _costGaussian(self, size, pos, X):
+        beta = 2
+        
+        size_x = size[0]
+        size_y = size[1]
+        size_z = size[2]
+        pos_x = pos[0]
+        pos_y = pos[1]
+        pos_z = pos[2]
+        x = X[0]
+        y = X[1]
+        z = X[2]
+        part_x = (x-pos_x)**beta/(2*size_x**2)
+        part_y = (y-pos_y)**beta/(2*size_y**2)
+        part_z = (z-pos_z)**beta/(2*size_z**2)
+
+        norm_factor = 1/(size_x*size_y*size_z*2*np.pi*np.sqrt(2*np.pi))
+
+        h_gaus = norm_factor * cs.exp(-(part_x + part_y + part_z))
+        return h_gaus

@@ -70,7 +70,7 @@ def run(
     H = .5
     H_STEP = .05
     R = .3
-    INIT_XYZS = np.array([[R*np.cos((i/6)*2*np.pi+np.pi/2), -0.2 + R*np.sin((i/6)*2*np.pi+np.pi/2)-R, 1 + H+i*H_STEP] for i in range(num_drones)])
+    INIT_XYZS = np.array([[-.2 + R*np.cos((i/6)*2*np.pi+np.pi/2), -0.2 + R*np.sin((i/6)*2*np.pi+np.pi/2)-R, 0.5 +  H+i*H_STEP] for i in range(num_drones)])
     INIT_RPYS = np.array([[0, 0,  i * (np.pi/2)/num_drones] for i in range(num_drones)])
     AGGR_PHY_STEPS = int(simulation_freq_hz/control_freq_hz) if aggregate else 1
 
