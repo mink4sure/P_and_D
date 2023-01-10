@@ -11,7 +11,7 @@ class MPC(BaseControl):
         super().__init__(drone_model=drone_model, g=g)
 
         # Getting parameters for drone control
-        self.horizon = 10
+        self.horizon = 5
 
         self.g = g
         self.m = self._getURDFParameter('m')
@@ -25,7 +25,7 @@ class MPC(BaseControl):
         self.F_max = self.KF * self.RPM_max**2
 
         # Calculating max rate fo change of force given max dRPM
-        self.dRPM_max = 1000
+        self.dRPM_max = 5000
         self.dF_max = self.KF * 2 * self.dRPM_max
         
         # f is defined as U = f @ F so the following
@@ -34,13 +34,14 @@ class MPC(BaseControl):
         self.f = np.array([[1, 1, 1, 1],    # Total thust of the system
                             [-1, 0, 1, 0],  # Forces that cause a rotation theta (around y-axis)
                             [0, 1, 0, -1],  # Forces that cause a rotation phi (around x-axis)
-                            [1, -1, 1, -1]])# Relationship between produced forces and resulting
+                            [-1, 1, -1, 1]])# Relationship between produced forces and resulting
                                             # moments about the z-axis (related to angle psi)
 
         self.rotZ = np.sqrt(2)/2 * np.array([[1, -1, 0],
                                              [1, 1, 0],
                                              [0, 0, 2/np.sqrt(2)]])
 
+    
     def computeControl(self, control_timestep, cur_pos, cur_quat, cur_vel,
                        cur_ang_vel, target_pos, target_rpy=np.zeros(3),
                         target_vel=np.zeros(3), target_rpy_rates=np.zeros(3)):
@@ -55,6 +56,10 @@ class MPC(BaseControl):
         cur_ang_vel = self.rotate45Z(cur_ang_vel)
         target_rpy = self.rotate45Z(target_rpy)
 
+        print("cur_rpy: ", cur_rpy)
+        print("cur_ang_vel: ", cur_ang_vel)
+        print("target_rpy: ", target_rpy)
+
         # Creating the optimizer object
         opti = cs.Opti()
 
@@ -62,14 +67,22 @@ class MPC(BaseControl):
         X = opti.variable(12, self.horizon+1)
         U = opti.variable(4, self.horizon)
 
+        # Getting the matrix to convert input U into F
+        inv_f = cs.DM(4, 4)
+        inv_f = np.linalg.inv(self.f)
+        F = inv_f@U
+
         # Objective
         obj = 0
         for k in range(self.horizon):
             obj += 5 * (X[0:3, k] - target_pos).T @ (X[0:3, k] - target_pos)
-            obj += (X[3:6, k] - target_vel).T @ (X[3:6, k] - target_vel)
-            obj += (X[6:9, k] - target_rpy).T @ (X[6:9, k] - target_rpy)
-            obj += (X[9:12, k] - target_rpy_rates).T @ (X[9:12, k] - target_rpy_rates)
-
+            #obj += 5 * (X[3:, k]).T @ (X[3:, k])
+            #obj += - 1 - cs.cos(X[6, k])
+            #obj += - 1 - cs.cos(X[7, k])
+            #obj += cs.sin(X[8, k])
+            #obj += X[6:9, k].T @ X[6:9, k]
+            #obj += X[9:12, k].T @ X[9:12, k]
+            
         self.dynamics(optimizer=opti, X=X, U=U, dt=dt)
 
         # Constrains
@@ -77,54 +90,60 @@ class MPC(BaseControl):
         opti.subject_to([X[0:3, 0] == cur_pos,
                         X[3:6, 0] == cur_vel,
                         X[6:9, 0] == cur_rpy,
-                        X[9:, 0] == cur_ang_vel])
+                        X[9:12, 0] == cur_ang_vel])
 
-        # Getting the matrix to convert input U into F
-        inv_f = cs.DM(4, 4)
-        inv_f = np.linalg.inv(self.f)
-        F = inv_f@U
-
-        for k in range(self.horizon-1):
+        for k in range(self.horizon):
             # Setting limit on maximum Force
             opti.subject_to([
-                F[:, k] >= np.zeros(4),
-                F[:, k] <= np.ones(4) * self.F_max,
+                F[:, k] >= 0,
+                F[:, k] <= self.F_max,
+                            ])
+
+        for k in range(1, self.horizon-1):
+            # Setting limit on maximum change in Force
+            opti.subject_to([
+                #cs.fabs(F[:, k]-F[:, k+1]) <= self.dF_max
                 (F[:, k]-F[:, k+1])**2 <= self.dF_max**2
                             ])
 
-            # Setting limit on roll and pitch
-            opti.subject_to([
-                X[8, k] <= np.pi/180,
-                X[8, k] >= -np.pi/180,
-                X[9:11, k] <= 20/180 * np.pi
-            ])
+        #for k in range(self.horizon):
+            # Setting limits on state
+            #opti.subject_to([
+               #X[0:3, k] >= -0.1,
+               #X[0:3, k] <= 0.5,
+               #X[3:6, k] >= -0.5,
+               #X[3:6, k] <= 0.5,
+               #X[6:8, k] >= -1,
+               #X[6:8, k] <= 1,
 
+               #X[8, k] >= -1,
+               #X[8, k] <= 1,
+               #X[11, k] >= -1,
+               #X[11, k] <= 1,
+               #X[9:12, k] >= -1,
+               #X[9:12, k] <= 1,
+            #])
 
-
-
-
-
+            
         # Letting the solver do it's work
-        opti.solver('ipopt')
+        p_opts = {'error_on_fail': False}
+        s_opts = {
+            #"max_iter": 10000
+            }
+        opti.solver('ipopt', p_opts, s_opts)
         opti.minimize(obj)
         sol = opti.solve()
-        
+
         # Storing the input solution into F and converting it to RPM
         # not allowing any negative RPM
         F = inv_f @ sol.value(U)[:, 0]
-        rpm_t = np.zeros(4)
+        rpm = np.zeros(4)
         for i in range(4):
             if F[i] > 0:
-                rpm_t[i] = (F[i]/self.KF)**(0.5)
+                rpm[i] = (F[i]/self.KF)**(0.5)
             else:
                 print('Negative force encountered :', F[i])
-                rpm_t[i] = 0
-
-        # Maybe switch around whith motor recieves what RPM (Not sure what the used definition is)
-        lst = [0, 1, 2, 3]
-        rpm = np.array([rpm_t[lst[0]], rpm_t[lst[1]], rpm_t[lst[2]], rpm_t[lst[3]]])
-
-        #rpm = np.array([0, 0, 10000, 0])
+                rpm[i] = 0
 
         print('Found forces: ', F)
         print("Found RPM: ", rpm)
@@ -145,14 +164,14 @@ class MPC(BaseControl):
             psi = o[2, k]
 
             # Calculating  second order derivatives based on the paper
-            """ ddx = (u[0, k] * (casadi.sin(psi)*casadi.sin(phi) 
-                    + casadi.cos(psi)*casadi.sin(theta) * casadi.cos(phi))) / self.m
-            ddy = (u[0, k] * (casadi.sin(psi)*casadi.sin(theta)*casadi.cos(phi)
-                    - casadi.cos(psi)*casadi.sin(phi))) / self.m
-            ddz = (u[0, k]*(casadi.cos(psi)*casadi.cos(theta))) / self.m - self.g """
-            ddx = cs.sin(theta) * U[0, k] / self.m
-            ddy = cs.sin(phi) * U[0, k] / self.m
-            ddz = U[0, k] /self.m - self.g
+            ddx = (U[0, k] * (cs.sin(psi)*cs.sin(phi) 
+                    + cs.cos(psi)*cs.sin(theta) * cs.cos(phi))) / self.m
+            ddy = (U[0, k] * (cs.sin(psi)*cs.sin(theta)*cs.cos(phi)
+                    - cs.cos(psi)*cs.sin(phi))) / self.m
+            ddz = (U[0, k]*(cs.cos(psi)*cs.cos(theta))) / self.m - self.g
+            #ddx = cs.sin(theta) * U[0, k] / self.m
+            #ddy = cs.sin(phi) * U[0, k] / self.m
+            #ddz = U[0, k] /self.m - self.g
 
             ddphi = (U[2, k] * self.l) / self.Ixx
             ddtheta = (U[1, k] * self.l) / self.Iyy
