@@ -39,7 +39,7 @@ class PIDMPCControl(BaseControl):
 
         # MPC variables
         self.horizon = 100
-        self.T = 1
+        self.T = 10
         self.Vmax = 1
 
         self.P_COEFF_FOR = np.array([.4, .4, 1.25])
@@ -265,17 +265,20 @@ class PIDMPCControl(BaseControl):
 
     def _MPCtraject(self, cur_pos, cur_vel, target_pos, dt_simulation):
         
+        print("Target position: ", target_pos)
+
         dt = dt_simulation*self.T
 
         ### SOLVER OBJECT AND VARIABLES###
         opti = cs.Opti()
-        X = opti.variable(6, self.horizon + 1)
+        X = opti.variable(6, self.horizon)
 
         ### COST ###
         obj = 0
+        obj += (X[0:3, -1] - target_pos).T @ (X[0:3, -1] - target_pos)
         for k in range(self.horizon):
             #obj += (X[0:3, k] - target_pos).T @ (X[0:3, k] - target_pos)
-            obj += 1000 *  (X[0:3, k] - target_pos).T @ (X[0:3, k] - target_pos)
+            obj += (X[0:3, k] - target_pos).T @ (X[0:3, k] - target_pos)
 
         
         ### Initial position constraint ###
@@ -285,20 +288,19 @@ class PIDMPCControl(BaseControl):
         ])
 
         ### Dynamics ###
-        for k in range(self.horizon):
+        for k in range(self.horizon-1):
             opti.subject_to([
                 X[0:3, k+1] == X[0:3, k] + dt * X[3:6, k],
            ])
 
         ### Contrains ###
-        for k in range(self.horizon):
-            opti.subject_to([
-                X[3:6, k+1].T @ X[3:6, k+1] <= self.Vmax
-            ])
+        for k in range(1, self.horizon):
+            opti.subject_to(X[3:6, k].T @ X[3:6, k] <= self.Vmax**2)
 
         opti.solver('ipopt')
+        opti.minimize(obj)
         sol = opti.solve()
 
-        return sol.value(X)[0:3, 1], sol.value(X)[0:3, 1]
+        return sol.value(X)[0:3, 1], sol.value(X)[3:6, 1]
 
 
