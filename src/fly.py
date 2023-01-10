@@ -28,9 +28,8 @@ import matplotlib.pyplot as plt
 
 from gym_pybullet_drones.utils.enums import DroneModel, Physics
 #from gym_pybullet_drones.envs.CtrlAviary import CtrlAviary
-from TestAviary import TestAviary as VisionAviary
-from Control import DSLPIDControl
-from gym_pybullet_drones.control.SimplePIDControl import SimplePIDControl
+from TestAviary import TestAviary
+from Control import PIDMPCControl
 from gym_pybullet_drones.utils.Logger import Logger
 from gym_pybullet_drones.utils.utils import sync, str2bool
 
@@ -105,21 +104,7 @@ def run(
     # wp_counters = np.array([0 for i in range(num_drones)])
 
     #### Create the environment with or without video capture ##
-    if vision: 
-        env = VisionAviary(drone_model=drone,
-                           num_drones=num_drones,
-                           initial_xyzs=INIT_XYZS,
-                           initial_rpys=INIT_RPYS,
-                           physics=physics,
-                           neighbourhood_radius=10,
-                           freq=simulation_freq_hz,
-                           aggregate_phy_steps=AGGR_PHY_STEPS,
-                           gui=gui,
-                           record=record_video,
-                           obstacles=obstacles
-                           )
-    else: 
-        env = CtrlAviary(drone_model=drone,
+    env = TestAviary(drone_model=drone,
                          num_drones=num_drones,
                          initial_xyzs=INIT_XYZS,
                          initial_rpys=INIT_RPYS,
@@ -144,11 +129,8 @@ def run(
                     )
 
     #### Initialize the controllers ############################
-    if drone in [DroneModel.CF2X, DroneModel.CF2P]:
-        ctrl = [DSLPIDControl(drone_model=drone) for i in range(num_drones)]
-    elif drone in [DroneModel.HB]:
-        ctrl = [SimplePIDControl(drone_model=drone) for i in range(num_drones)]
-
+    ctrl = [PIDMPCControl(drone_model=drone) for i in range(num_drones)]
+    
     #### Run the simulation ####################################
     CTRL_EVERY_N_STEPS = int(np.floor(env.SIM_FREQ/control_freq_hz))
     action = {str(i): np.array([0,0,0,0]) for i in range(num_drones)}
