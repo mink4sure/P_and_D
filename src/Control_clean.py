@@ -11,7 +11,7 @@ class MPC(BaseControl):
         super().__init__(drone_model=drone_model, g=g)
 
         # Getting parameters for drone control
-        self.horizon = 5
+        self.horizon = 20
 
         self.g = g
         self.m = self._getURDFParameter('m')
@@ -75,7 +75,7 @@ class MPC(BaseControl):
         # Objective
         obj = 0
         for k in range(self.horizon):
-            obj += 5 * (X[0:3, k] - target_pos).T @ (X[0:3, k] - target_pos)
+            obj += (X[0:3, k] - target_pos).T @ (X[0:3, k] - target_pos)
             #obj += 5 * (X[3:, k]).T @ (X[3:, k])
             #obj += - 1 - cs.cos(X[6, k])
             #obj += - 1 - cs.cos(X[7, k])
@@ -111,7 +111,7 @@ class MPC(BaseControl):
         for k in range(self.horizon):
             # Setting limits on state
             opti.subject_to([
-               #X[0:3, k] >= -0.1,
+               X[0:3, k] >= -0.1,
                #X[0:3, k] <= 0.5,
                #X[3:6, k] >= -0.5,
                #X[3:6, k] <= 0.5,
@@ -122,8 +122,8 @@ class MPC(BaseControl):
                #X[8, k] <= 1,
                #X[11, k] >= -1,
                #X[11, k] <= 1,
-               X[9:12, k] >= -2,
-               X[9:12, k] <= 2,
+               #X[9:12, k] >= -4,
+               #X[9:12, k] <= 4,
             ])
 
             
