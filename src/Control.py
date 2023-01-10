@@ -38,7 +38,7 @@ class PIDMPCControl(BaseControl):
             exit()
 
         # MPC variables
-        self.horizon = 100
+        self.horizon = 24
         self.T = 10
         self.Vmax = 1
 
@@ -279,6 +279,7 @@ class PIDMPCControl(BaseControl):
         for k in range(self.horizon):
             #obj += (X[0:3, k] - target_pos).T @ (X[0:3, k] - target_pos)
             obj += (X[0:3, k] - target_pos).T @ (X[0:3, k] - target_pos)
+            obj += self._costCube(X[0:2, k])
 
         
         ### Initial position constraint ###
@@ -297,6 +298,7 @@ class PIDMPCControl(BaseControl):
         for k in range(1, self.horizon):
             opti.subject_to(X[3:6, k].T @ X[3:6, k] <= self.Vmax**2)
 
+        s_opts = {'max_iterations': 5000}
         opti.solver('ipopt')
         opti.minimize(obj)
         sol = opti.solve()
@@ -304,3 +306,7 @@ class PIDMPCControl(BaseControl):
         return sol.value(X)[0:3, 1], sol.value(X)[3:6, 1]
 
 
+    def _costCube(self, X):
+        r = (X[0])**2 + (X[1]-2)**2
+        temp = -2000*(r)**2 + 100
+        return temp * cs.if_else(r >= 0.6, 1, 0)
