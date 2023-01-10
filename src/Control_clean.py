@@ -79,7 +79,9 @@ class MPC(BaseControl):
             #obj += 5 * (X[3:, k]).T @ (X[3:, k])
             #obj += - 1 - cs.cos(X[6, k])
             #obj += - 1 - cs.cos(X[7, k])
-            #obj += cs.sin(X[8, k])
+            obj += cs.sin(X[9, k]) ** 2
+            obj += cs.sin(X[10, k]) ** 2
+            obj += cs.sin(X[11, k]) ** 2
             #obj += X[6:9, k].T @ X[6:9, k]
             #obj += X[9:12, k].T @ X[9:12, k]
             
@@ -106,9 +108,9 @@ class MPC(BaseControl):
                 (F[:, k]-F[:, k+1])**2 <= self.dF_max**2
                             ])
 
-        #for k in range(self.horizon):
+        for k in range(self.horizon):
             # Setting limits on state
-            #opti.subject_to([
+            opti.subject_to([
                #X[0:3, k] >= -0.1,
                #X[0:3, k] <= 0.5,
                #X[3:6, k] >= -0.5,
@@ -120,9 +122,9 @@ class MPC(BaseControl):
                #X[8, k] <= 1,
                #X[11, k] >= -1,
                #X[11, k] <= 1,
-               #X[9:12, k] >= -1,
-               #X[9:12, k] <= 1,
-            #])
+               X[9:12, k] >= -2,
+               X[9:12, k] <= 2,
+            ])
 
             
         # Letting the solver do it's work
