@@ -42,7 +42,7 @@ DEFAULT_RECORD_VISION = False
 DEFAULT_PLOT = True
 DEFAULT_USER_DEBUG_GUI = False
 DEFAULT_AGGREGATE = True
-DEFAULT_OBSTACLES = True
+DEFAULT_OBSTACLES = False
 DEFAULT_SIMULATION_FREQ_HZ = 240
 DEFAULT_CONTROL_FREQ_HZ = 48
 DEFAULT_DURATION_SEC = 12
@@ -70,7 +70,7 @@ def run(
     H = .5
     H_STEP = .05
     R = .3
-    INIT_XYZS = np.array([[R*np.cos((i/6)*2*np.pi+np.pi/2), R*np.sin((i/6)*2*np.pi+np.pi/2)-R, H+i*H_STEP] for i in range(num_drones)])
+    INIT_XYZS = np.array([[R*np.cos((i/6)*2*np.pi+np.pi/2), -0.2 + R*np.sin((i/6)*2*np.pi+np.pi/2)-R, 1 + H+i*H_STEP] for i in range(num_drones)])
     INIT_RPYS = np.array([[0, 0,  i * (np.pi/2)/num_drones] for i in range(num_drones)])
     AGGR_PHY_STEPS = int(simulation_freq_hz/control_freq_hz) if aggregate else 1
 
@@ -103,6 +103,7 @@ def run(
     #         TARGET_POS[i, :] = 1 - ((i-5*NUM_WP/6)*6)/NUM_WP, 1 - ((i-5*NUM_WP/6)*6)/NUM_WP, 0.5 - 0.5*((i-5*NUM_WP/6)*6)/NUM_WP
     # wp_counters = np.array([0 for i in range(num_drones)])
 
+
     #### Create the environment with or without video capture ##
     env = TestAviary(drone_model=drone,
                          num_drones=num_drones,
@@ -118,6 +119,14 @@ def run(
                          user_debug_gui=user_debug_gui
                          )
 
+    #### Build custom obsacles
+    OBSTACLES = []
+    OBSTACLE_1 = p.loadURDF("cube_no_rotation.urdf", [0, 2, .5], p.getQuaternionFromEuler([0, 0, 0]), physicsClientId=env.CLIENT) 
+    OBSTACLE_2 = p.loadURDF("cube_no_rotation.urdf", [0, 2, 1.5], p.getQuaternionFromEuler([0, 0, 1]), physicsClientId=env.CLIENT) 
+    OBSTACLES.append(OBSTACLE_1)
+    OBSTACLES.append(OBSTACLE_2)
+
+
     #### Obtain the PyBullet Client ID from the environment ####
     PYB_CLIENT = env.getPyBulletClient()
 
@@ -129,7 +138,7 @@ def run(
                     )
 
     #### Initialize the controllers ############################
-    ctrl = [PIDMPCControl(drone_model=drone) for i in range(num_drones)]
+    ctrl = [PIDMPCControl(drone_model=drone, obstacles=OBSTACLES) for i in range(num_drones)]
     
     #### Run the simulation ####################################
     CTRL_EVERY_N_STEPS = int(np.floor(env.SIM_FREQ/control_freq_hz))
@@ -150,7 +159,7 @@ def run(
             for j in range(num_drones):
                 action[str(j)], _, _ = ctrl[j].computeControlFromState(control_timestep=CTRL_EVERY_N_STEPS*env.TIMESTEP,
                                                                        state=obs[str(j)]["state"],
-                                                                       target_pos = np.array([0, 3, 0.5]),
+                                                                       target_pos = np.array([0, 4, 1]),
                                                                        #target_pos=np.hstack([TARGET_POS[wp_counters[j], 0:2], INIT_XYZS[j, 2]]),
                                                                        # target_pos=INIT_XYZS[j, :] + TARGET_POS[wp_counters[j], :],
                                                                        target_rpy=INIT_RPYS[j, :]

@@ -20,7 +20,8 @@ class PIDMPCControl(BaseControl):
 
     def __init__(self,
                  drone_model: DroneModel,
-                 g: float=9.8
+                 g: float=9.8, 
+                 obstacles: list=[]
                  ):
         """Common control classes __init__ method.
 
@@ -41,6 +42,8 @@ class PIDMPCControl(BaseControl):
         self.horizon = 24
         self.T = 10
         self.Vmax = 1
+
+        self.OBS = obstacles
 
         self.P_COEFF_FOR = np.array([.4, .4, 1.25])
         self.I_COEFF_FOR = np.array([.05, .05, .05])
@@ -266,6 +269,10 @@ class PIDMPCControl(BaseControl):
     def _MPCtraject(self, cur_pos, cur_vel, target_pos, dt_simulation):
         
         print("Target position: ", target_pos)
+        #temp = p.getCollisionShapeData(self.OBS[0], -1, physicsClientId=env.CLIENT)
+        #print(temp)
+
+        obs1 = [0, 2, 1]
 
         dt = dt_simulation*self.T
 
@@ -297,6 +304,7 @@ class PIDMPCControl(BaseControl):
         ### Contrains ###
         for k in range(1, self.horizon):
             opti.subject_to(X[3:6, k].T @ X[3:6, k] <= self.Vmax**2)
+            opti.subject_to(cs.sqrt((X[0:3, k] - obs1).T @ (X[0:3, k] - obs1)) >= 1)
 
         s_opts = {'max_iterations': 5000}
         opti.solver('ipopt')
