@@ -9,4 +9,8 @@ the complex dynamics, we have hit a little snag.
 **For that code see branch: MPC**
 
 ### Local Planning with MPC
-explain
+This code heavily relies on code provided at [utiasDSL/gym-pybuller-drones](https://github.com/utiasDSL/gym-pybullet-drones). If you want to get this code working, make sure to install the code provided in their repository as mentioned in their README.md.
+
+For the calculation of the solution of the MPC problem, the [CasADi](https://web.casadi.org/) framework is used.
+
+To start the simulation, run *fly.py* in the *src/* directory.  
