@@ -39,7 +39,7 @@ class PIDMPCControl(BaseControl):
             exit()
 
         # MPC variables
-        self.horizon = 24
+        self.horizon = 48
         self.T = 10
         self.Vmax = 0.5
 
@@ -280,17 +280,35 @@ class PIDMPCControl(BaseControl):
         opti = cs.Opti()
         X = opti.variable(6, self.horizon)
 
+
+        pos_objs = [[2, -.5, .5], [2, .5, .5], [2, -1.5, .5], [2, 1.5, .5],
+                    [4, 0, .5], [4, 0, 1.5], [4, 0, 3.5], [4, 0, 3.5]]
+
+
         ### COST ###
-        q = 80
+        q = 40
         obj = 0
         obj += (X[0:3, -1] - target_pos).T @ (X[0:3, -1] - target_pos)
         for k in range(self.horizon):
             #obj += (X[0:3, k] - target_pos).T @ (X[0:3, k] - target_pos)
             obj += ((X[0:3, k] - target_pos).T @ (X[0:3, k] - target_pos))
-            obj += q * self._costGaussian(size=[0.25, 2, 1], pos=[2, 0, 0.5],    X=X[:, k]) #eerste onder
-            obj += q * self._costGaussian(size=[0.25, 1, 1], pos=[2, -0.5, 1.5], X=X[:, k]) #eerste rechts boven
-            obj += q * self._costGaussian(size=[0.25, 2, 1], pos=[4, 0, 1.5],    X=X[:, k]) #tweede boven
-            obj += q * self._costGaussian(size=[0.25, 1, 1], pos=[4, 0.5, 0.5],  X=X[:, k]) #tweede links oder
+            #obj += 1/(X[2, k] )
+       
+            k1 = 1.2
+            obj += k1 * q * self._costGaussian(size=[1, 1, 1], pos=[2, -.5, .5], X=X[:, k]) #eerste onder
+            obj += k1 * q * self._costGaussian(size=[1, 1, 1], pos=[2, .5, .5], X=X[:, k]) #eerste onder
+            obj += k1 * q * self._costGaussian(size=[1, 1, 1], pos=[2, -1.5, .5], X=X[:, k]) #eerste onder
+            obj += k1 * q * self._costGaussian(size=[1, 1, 1], pos=[2, 1.5, .5], X=X[:, k]) #eerste onder
+
+            # toren
+            k2 = 1.5
+            obj += k2 * q * self._costGaussian(size=[1, 1, 1], pos=[4, 0, .5], X=X[:, k]) #eerste onder
+            obj += k2 * q * self._costGaussian(size=[1, 1, 1], pos=[4, 0, 1.5], X=X[:, k]) #eerste onder
+            obj += k2 * q * self._costGaussian(size=[1, 1, 1], pos=[4, 0, 2.5], X=X[:, k]) #eerste onder
+            obj += k2 * q * self._costGaussian(size=[1, 1, 1], pos=[4, 0, 3.5], X=X[:, k]) #eerste onder
+            #obj += 12 * q * self._costGaussian(size=[1, 2, 2], pos=[4, 1, 1], X=X[:, k]) #eerste rechts boven
+            #obj += q * self._costGaussian(size=[0.25, 2, 1], pos=[4, 0, 1.5],    X=X[:, k]) #tweede boven
+            #obj += q * self._costGaussian(size=[0.25, 1, 1], pos=[4, 0.5, 0.5],  X=X[:, k]) #tweede links oder """
 
         
         ### Initial position constraint ###

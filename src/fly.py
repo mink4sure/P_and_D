@@ -24,6 +24,7 @@ import math
 import random
 import numpy as np
 import pybullet as p
+import pybullet_data
 import matplotlib.pyplot as plt
 
 from gym_pybullet_drones.utils.enums import DroneModel, Physics
@@ -45,7 +46,7 @@ DEFAULT_AGGREGATE = True
 DEFAULT_OBSTACLES = False
 DEFAULT_SIMULATION_FREQ_HZ = 240
 DEFAULT_CONTROL_FREQ_HZ = 48
-DEFAULT_DURATION_SEC = 12
+DEFAULT_DURATION_SEC = 9
 DEFAULT_OUTPUT_FOLDER = 'results'
 DEFAULT_COLAB = False
 
@@ -70,7 +71,7 @@ def run(
     H = .5
     H_STEP = .05
     R = .3
-    INIT_XYZS = np.array([[-.2 + R*np.cos((i/6)*2*np.pi+np.pi/2), -0.2 + R*np.sin((i/6)*2*np.pi+np.pi/2)-R, 0.5 +  H+i*H_STEP] for i in range(num_drones)])
+    INIT_XYZS = np.array([[0 + R*np.cos((i/6)*2*np.pi+np.pi/2), 0 + R*np.sin((i/6)*2*np.pi+np.pi/2)-R, H+i*H_STEP] for i in range(num_drones)])
     INIT_RPYS = np.array([[0, 0,  i * (np.pi/2)/num_drones] for i in range(num_drones)])
     AGGR_PHY_STEPS = int(simulation_freq_hz/control_freq_hz) if aggregate else 1
 
@@ -124,8 +125,19 @@ def run(
     #OBSTACLE_1 = p.loadURDF("cube_no_rotation.urdf", [0, 2, .5], p.getQuaternionFromEuler([0, 0, 0]), physicsClientId=env.CLIENT) 
     #OBSTACLE_2 = p.loadURDF("cube_no_rotation.urdf", [0, 2, 1.5], p.getQuaternionFromEuler([0, 0, 1]), physicsClientId=env.CLIENT) 
 
-    p.loadURDF("L/urdf/L.urdf", [2, 0, 1], p.getQuaternionFromEuler([0, 0, np.pi/2]), physicsClientId=env.CLIENT)
-    p.loadURDF("L/urdf/L.urdf", [4, 0, 1], p.getQuaternionFromEuler([0,np.pi, np.pi/2]), physicsClientId=env.CLIENT)
+    #p.setAdditionalSearchPath(pybullet_data.getDataPath())
+    p.loadURDF("cube_no_rotation.urdf", [4, 0, 0.5], p.getQuaternionFromEuler([0, 0, 0]), physicsClientId=env.CLIENT)
+    p.loadURDF("cube_no_rotation.urdf", [4, 0, 1.5], p.getQuaternionFromEuler([0, 0, 0]), physicsClientId=env.CLIENT)
+    p.loadURDF("cube_no_rotation.urdf", [4, 0, 2.5], p.getQuaternionFromEuler([0, 0, 0]), physicsClientId=env.CLIENT)
+    p.loadURDF("cube_no_rotation.urdf", [4, 0, 3.5], p.getQuaternionFromEuler([0, 0, 0]), physicsClientId=env.CLIENT)
+
+    p.loadURDF("cube_no_rotation.urdf", [2, -0.5, 0.5], p.getQuaternionFromEuler([0, 0, 0]), physicsClientId=env.CLIENT)
+    p.loadURDF("cube_no_rotation.urdf", [2, 0.5, 0.5], p.getQuaternionFromEuler([0, 0, 0]), physicsClientId=env.CLIENT)
+    p.loadURDF("cube_no_rotation.urdf", [2, -1.5, 0.5], p.getQuaternionFromEuler([0, 0, 0]), physicsClientId=env.CLIENT)
+    p.loadURDF("cube_no_rotation.urdf", [2, 1.5, 0.5], p.getQuaternionFromEuler([0, 0, 0]), physicsClientId=env.CLIENT)
+    #p.loadURDF("cube_no_rotation.urdf", [4, 1.5, 0.5], p.getQuaternionFromEuler([0, 0, 0]), physicsClientId=env.CLIENT)
+    #p.loadURDF("cube_no_rotation.urdf", [4, 1.5, 1.5], p.getQuaternionFromEuler([0, 0, 0]), physicsClientId=env.CLIENT)
+    #p.loadURDF("L/urdf/L.urdf", [4, 0, 1], p.getQuaternionFromEuler([0,np.pi, np.pi/2]), physicsClientId=env.CLIENT)
 
 
 
