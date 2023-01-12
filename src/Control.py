@@ -287,8 +287,10 @@ class PIDMPCControl(BaseControl):
         for k in range(self.horizon):
             #obj += (X[0:3, k] - target_pos).T @ (X[0:3, k] - target_pos)
             obj += ((X[0:3, k] - target_pos).T @ (X[0:3, k] - target_pos))
-            obj += q * self._costGaussian(size=[1, 1, 1], pos=[0, 2, 0.5], X=X[:, k])
-            obj += q * self._costGaussian(size=[1, 1, 1], pos=[0, 2, 1.5], X=X[:, k])
+            obj += q * self._costGaussian(size=[0.25, 2, 1], pos=[2, 0, 0.5],    X=X[:, k]) #eerste onder
+            obj += q * self._costGaussian(size=[0.25, 1, 1], pos=[2, -0.5, 1.5], X=X[:, k]) #eerste rechts boven
+            obj += q * self._costGaussian(size=[0.25, 2, 1], pos=[4, 0, 1.5],    X=X[:, k]) #tweede boven
+            obj += q * self._costGaussian(size=[0.25, 1, 1], pos=[4, 0.5, 0.5],  X=X[:, k]) #tweede links oder
 
         
         ### Initial position constraint ###

@@ -121,10 +121,12 @@ def run(
 
     #### Build custom obsacles
     OBSTACLES = []
-    OBSTACLE_1 = p.loadURDF("cube_no_rotation.urdf", [0, 2, .5], p.getQuaternionFromEuler([0, 0, 0]), physicsClientId=env.CLIENT) 
-    OBSTACLE_2 = p.loadURDF("cube_no_rotation.urdf", [0, 2, 1.5], p.getQuaternionFromEuler([0, 0, 1]), physicsClientId=env.CLIENT) 
-    OBSTACLES.append(OBSTACLE_1)
-    OBSTACLES.append(OBSTACLE_2)
+    #OBSTACLE_1 = p.loadURDF("cube_no_rotation.urdf", [0, 2, .5], p.getQuaternionFromEuler([0, 0, 0]), physicsClientId=env.CLIENT) 
+    #OBSTACLE_2 = p.loadURDF("cube_no_rotation.urdf", [0, 2, 1.5], p.getQuaternionFromEuler([0, 0, 1]), physicsClientId=env.CLIENT) 
+
+    p.loadURDF("L/urdf/L.urdf", [2, 0, 1], p.getQuaternionFromEuler([0, 0, np.pi/2]), physicsClientId=env.CLIENT)
+    p.loadURDF("L/urdf/L.urdf", [4, 0, 1], p.getQuaternionFromEuler([0,np.pi, np.pi/2]), physicsClientId=env.CLIENT)
+
 
 
     #### Obtain the PyBullet Client ID from the environment ####
@@ -159,7 +161,7 @@ def run(
             for j in range(num_drones):
                 action[str(j)], _, _ = ctrl[j].computeControlFromState(control_timestep=CTRL_EVERY_N_STEPS*env.TIMESTEP,
                                                                        state=obs[str(j)]["state"],
-                                                                       target_pos = np.array([0, 4, 1]),
+                                                                       target_pos = np.array([6, 0, 1]),
                                                                        #target_pos=np.hstack([TARGET_POS[wp_counters[j], 0:2], INIT_XYZS[j, 2]]),
                                                                        # target_pos=INIT_XYZS[j, :] + TARGET_POS[wp_counters[j], :],
                                                                        target_rpy=INIT_RPYS[j, :]
