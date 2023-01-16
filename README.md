@@ -1,5 +1,5 @@
 ## PDM
-The code in this repository is the code for the project of the course Planning and Decision Making. The goal of the project is to understand the kinematics of a simple robotic model, implement a motion planning algorithm in a simulation environment and validate its performance. In this code a (simpflified) motion planning pipeline for a drone is implemented.
+The code in this repository is the code for the project of the course Planning and Decision Making. The goal of the project is to understand the kinematics of a simple robotic model, implement a motion planning algorithm in a simulation environment and validate its performance. In this code a (simplified) motion planning pipeline for a drone is implemented.
 
 It is spilt up into two main sections: The working code, which has an MPC for
 local motion planning and a PID for control of the drone and the not so working
