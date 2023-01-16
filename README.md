@@ -25,7 +25,7 @@ $ python3 fly.py
 
 The constrains and cost functions of the motion planning algorithm are defined in the file *Control.py*
 
-<img src="https://github.com/mink4sure/P_and_D/blob/main/Drone_gif.gif" width="300" height="169" />
+<img src="https://github.com/mink4sure/P_and_D/blob/main/Drone_gif.gif" width="600" height="338" />
 
 ### References
 - Panerati, J., Zheng, H., Zhou, S., Xu, J., Prorok, A., & Schoellig, A. P. (2021). Learning to Fly---a Gym Environment with PyBullet Physics for Reinforcement Learning of Multi-agent Quadcopter Control. 2021 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS), 1(1), 1–8. https://doi.org/10.0000/00000
