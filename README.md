@@ -25,6 +25,7 @@ $ python3 fly.py
 
 The constrains and cost functions of the motion planning algorithm are defined in the file *Control.py*
 
+Here a video of te final result:
 <img src="https://github.com/mink4sure/P_and_D/blob/main/Drone_gif.gif" width="600" height="338" />
 
 ### References
